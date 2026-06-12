@@ -169,14 +169,41 @@ fi
 mkdir -p "$INSTALL_DIR" "$RUN_DIR" "$LOG_DIR"
 curl -fsSL "$REPO_RAW/agent/agent.py" -o "$INSTALL_DIR/agent.py"
 
+install_agent_python_deps_with_package_manager() {
+  if command -v apk >/dev/null 2>&1; then
+    apk add --no-cache py3-psutil py3-requests
+  elif command -v apt-get >/dev/null 2>&1; then
+    apt-get update
+    apt-get install -y python3-psutil python3-requests
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y python3-psutil python3-requests
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y python3-psutil python3-requests
+  elif command -v zypper >/dev/null 2>&1; then
+    zypper --non-interactive install python3-psutil python3-requests
+  else
+    return 1
+  fi
+  python3 - <<'PY'
+import psutil
+import requests
+print("python deps ok")
+PY
+}
+
 PIP_FLAGS=()
 if python3 -m pip install --help 2>/dev/null | grep -q -- "--break-system-packages"; then
   PIP_FLAGS+=(--break-system-packages)
 fi
-if ! python3 -m pip install "${PIP_FLAGS[@]}" --upgrade psutil==6.1.1 requests==2.32.3; then
-  echo "Python dependency install failed. Installing build dependencies and retrying..." >&2
-  install_build_deps
-  python3 -m pip install "${PIP_FLAGS[@]}" --upgrade psutil==6.1.1 requests==2.32.3
+
+if ! install_agent_python_deps_with_package_manager; then
+  python3 -m pip install "${PIP_FLAGS[@]}" --upgrade setuptools wheel
+  PIP_FLAGS+=(--no-build-isolation)
+  if ! python3 -m pip install "${PIP_FLAGS[@]}" --upgrade psutil==6.1.1 requests==2.32.3; then
+    echo "Python dependency install failed. Installing build dependencies and retrying..." >&2
+    install_build_deps
+    python3 -m pip install "${PIP_FLAGS[@]}" --upgrade psutil==6.1.1 requests==2.32.3
+  fi
 fi
 
 cat > "$CONFIG_PATH" <<EOF
