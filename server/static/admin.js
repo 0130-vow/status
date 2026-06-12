@@ -152,6 +152,7 @@ function renderEditForm() {
     const card = document.createElement("div");
     card.className = "agent-card";
     card.dataset.hostname = agent.hostname;
+    const servicesValue = agent.services || defaultServices;
     card.innerHTML = `
         <div class="agent-card-header">
             <div>
@@ -167,7 +168,7 @@ function renderEditForm() {
             </label>
             <label>
                 <span>服务探活</span>
-                <input class="agent-services-input" type="text" value="${escapeHtml(agent.services || "")}" placeholder="${escapeHtml(defaultServices)}">
+                <input class="agent-services-input" type="text" value="${escapeHtml(servicesValue)}" placeholder="${escapeHtml(defaultServices)}">
             </label>
             <label>
                 <span>上报间隔</span>
@@ -225,9 +226,10 @@ function editAgent(hostname) {
 }
 
 function readAgentForm(card) {
+    const servicesField = card.querySelector(".agent-services-input");
     return {
         name: card.querySelector(".agent-name-input").value.trim(),
-        services: card.querySelector(".agent-services-input").value.trim(),
+        services: servicesField.value.trim() || servicesField.placeholder.trim() || defaultServices,
         interval_seconds: Number(card.querySelector(".agent-interval-input").value || 60),
         public_ip: card.querySelector(".agent-public-ip-input").value.trim(),
         location: card.querySelector(".agent-location-input").value.trim(),

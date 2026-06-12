@@ -334,8 +334,9 @@ def build_install_command(payload: RegisterAgentPayload, token: str) -> str:
         f"--hostname {shlex.quote(payload.hostname)}",
         f"--token {shlex.quote(token)}",
         f"--interval {payload.interval_seconds}",
-        f"--services {shlex.quote(payload.services)}",
     ]
+    if payload.services.strip():
+        parts.append(f"--services {shlex.quote(payload.services)}")
     if payload.public_ip:
         parts.append(f"--public-ip {shlex.quote(payload.public_ip)}")
     if payload.location:
