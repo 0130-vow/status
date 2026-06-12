@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Probe Admin</title>
-    <link rel="stylesheet" href="/static/style.css?v=admin-layout-1">
+    <link rel="stylesheet" href="/static/style.css?v=agent-picker-1">
 </head>
 <body>
     <div class="container admin-container">
@@ -80,6 +80,11 @@
                     <h4>已添加节点</h4>
                     <button id="refresh-agents-btn" class="ghost-btn">刷新</button>
                 </div>
+                <div class="agent-picker" id="agent-picker"></div>
+                <div class="admin-actions agent-picker-actions" id="agent-picker-actions">
+                    <button id="edit-selected-btn" class="primary-btn" type="button">进入编辑</button>
+                    <span id="agent-picker-status"></span>
+                </div>
                 <div class="agent-list" id="agent-list"></div>
                 <div class="empty" id="agent-empty" hidden>暂无已添加节点</div>
             </section>
@@ -94,6 +99,6 @@
         </section>
     </div>
 
-    <script src="/static/admin.js?v=admin-layout-1"></script>
+    <script src="/static/admin.js?v=agent-picker-1"></script>
 </body>
 </html>
