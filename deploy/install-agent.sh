@@ -5,6 +5,8 @@ REPO_RAW="${PROBE_REPO_RAW:-https://raw.githubusercontent.com/0130-vow/status/ma
 INSTALL_DIR="${PROBE_AGENT_DIR:-/opt/probe-agent}"
 CONFIG_PATH="$INSTALL_DIR/config.ini"
 SERVICE_NAME="${PROBE_AGENT_SERVICE:-probe-agent}"
+RUN_DIR="${PROBE_AGENT_RUN_DIR:-/var/run/probe-agent}"
+LOG_DIR="${PROBE_AGENT_LOG_DIR:-/var/log/probe-agent}"
 
 usage() {
   cat <<'EOF'
@@ -24,6 +26,8 @@ Environment:
   PROBE_REPO_RAW          Raw GitHub base URL.
   PROBE_AGENT_DIR         Install directory. Default: /opt/probe-agent
   PROBE_AGENT_SERVICE     systemd service name. Default: probe-agent
+  PROBE_AGENT_RUN_DIR     Runtime directory. Default: /var/run/probe-agent
+  PROBE_AGENT_LOG_DIR     Log directory. Default: /var/log/probe-agent
 EOF
 }
 
@@ -162,7 +166,7 @@ if ! python3 -m pip --version >/dev/null 2>&1; then
   bootstrap_pip
 fi
 
-mkdir -p "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR" "$RUN_DIR" "$LOG_DIR"
 curl -fsSL "$REPO_RAW/agent/agent.py" -o "$INSTALL_DIR/agent.py"
 
 PIP_FLAGS=()
@@ -188,7 +192,8 @@ public_ip = $PUBLIC_IP
 location = $LOCATION
 EOF
 
-cat > "/etc/systemd/system/$SERVICE_NAME.service" <<EOF
+install_systemd_service() {
+  cat > "/etc/systemd/system/$SERVICE_NAME.service" <<EOF
 [Unit]
 Description=Probe agent
 After=network-online.target
@@ -205,10 +210,52 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable --now "$SERVICE_NAME"
+  systemctl daemon-reload
+  systemctl enable --now "$SERVICE_NAME"
+}
+
+install_nohup_service() {
+  start_script="$INSTALL_DIR/start.sh"
+  pid_file="$RUN_DIR/$SERVICE_NAME.pid"
+  cat > "$start_script" <<EOF
+#!/usr/bin/env sh
+set -eu
+mkdir -p "$RUN_DIR" "$LOG_DIR"
+if [ -f "$pid_file" ]; then
+  old_pid="\$(cat "$pid_file" 2>/dev/null || true)"
+  if [ -n "\$old_pid" ] && kill -0 "\$old_pid" 2>/dev/null; then
+    exit 0
+  fi
+fi
+cd "$INSTALL_DIR"
+nohup /usr/bin/python3 "$INSTALL_DIR/agent.py" --config "$CONFIG_PATH" >> "$LOG_DIR/agent.out.log" 2>> "$LOG_DIR/agent.err.log" &
+echo \$! > "$pid_file"
+EOF
+  chmod +x "$start_script"
+  "$start_script"
+
+  if command -v crontab >/dev/null 2>&1; then
+    (crontab -l 2>/dev/null | grep -v "$start_script"; echo "@reboot $start_script") | crontab -
+  else
+    echo "crontab was not found; agent is running now, but startup after reboot was not configured." >&2
+  fi
+}
+
+if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+  install_systemd_service
+  SERVICE_MODE="systemd"
+else
+  install_nohup_service
+  SERVICE_MODE="nohup"
+fi
 
 echo "Probe agent installed and started."
 echo "Service: $SERVICE_NAME"
 echo "Config: $CONFIG_PATH"
-systemctl --no-pager --full status "$SERVICE_NAME" || true
+echo "Mode: $SERVICE_MODE"
+if [ "$SERVICE_MODE" = "systemd" ]; then
+  systemctl --no-pager --full status "$SERVICE_NAME" || true
+else
+  echo "PID file: $RUN_DIR/$SERVICE_NAME.pid"
+  echo "Logs: $LOG_DIR/agent.out.log $LOG_DIR/agent.err.log"
+fi
