@@ -2,7 +2,9 @@ server:
   host: "0.0.0.0"
   port: 8000
   stale_after_seconds: 180
-  admin_token: "change-me-admin-token"
+  admin_username: "admin"
+  admin_password: "change-me-admin-password"
+  admin_session_secret: "change-me-admin-session-secret"
   agents:
     - hostname: "node-01"
       token: "change-me-node-01"

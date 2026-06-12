@@ -420,6 +420,7 @@ header p {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: 8px;
+    margin-bottom: 18px;
     padding: 24px;
 }
 
@@ -459,6 +460,17 @@ header p {
     align-items: center;
     gap: 12px;
     margin-top: 18px;
+}
+
+.admin-session {
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-muted);
+    display: flex;
+    font-size: 13px;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
 }
 
 .primary-btn,

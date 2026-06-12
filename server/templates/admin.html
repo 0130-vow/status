@@ -18,12 +18,30 @@
             </nav>
         </header>
 
-        <section class="admin-panel">
+        <section class="admin-panel" id="login-panel">
             <div class="admin-grid">
                 <label>
-                    <span>管理 token</span>
-                    <input id="admin-token" type="password" autocomplete="current-password">
+                    <span>账号</span>
+                    <input id="admin-username" type="text" autocomplete="username" value="admin">
                 </label>
+                <label>
+                    <span>密码</span>
+                    <input id="admin-password" type="password" autocomplete="current-password">
+                </label>
+            </div>
+            <div class="admin-actions">
+                <button id="login-btn" class="primary-btn">登录</button>
+                <span id="login-status"></span>
+            </div>
+        </section>
+
+        <section class="admin-panel" id="agent-panel" hidden>
+            <div class="admin-session">
+                <span id="session-user"></span>
+                <button id="logout-btn" class="ghost-btn">退出</button>
+            </div>
+
+            <div class="admin-grid">
                 <label>
                     <span>节点名称</span>
                     <input id="hostname" type="text" placeholder="node-02">
@@ -39,6 +57,10 @@
                 <label>
                     <span>服务探活</span>
                     <input id="services" type="text" value="ssh:22">
+                </label>
+                <label>
+                    <span>公网 IP</span>
+                    <input id="public-ip" type="text" placeholder="可留空">
                 </label>
                 <label>
                     <span>位置</span>

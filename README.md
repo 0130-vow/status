@@ -91,7 +91,7 @@ curl -fsSL https://raw.githubusercontent.com/0130-vow/status/main/deploy/install
 https://status.777702.xyz/admin
 ```
 
-输入服务端 `config.yaml` 中的 `server.admin_token`，填写节点名称和探活项，即可登记节点并生成一键安装命令。
+使用服务端 `config.yaml` 中的 `server.admin_username` / `server.admin_password` 登录后，填写节点名称和探活项，即可登记节点并生成一键安装命令。
 
 手动部署方式：
 

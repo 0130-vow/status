@@ -23,7 +23,9 @@ class ServerSettings:
     host: str
     port: int
     stale_after_seconds: int
-    admin_token: str
+    admin_username: str
+    admin_password: str
+    admin_session_secret: str
     agents: tuple[AgentCredential, ...]
 
 
@@ -110,7 +112,11 @@ def load_config(path: str | Path | None = None) -> AppConfig:
             host=str(server_raw.get("host", "0.0.0.0")),
             port=int(server_raw.get("port", 8000)),
             stale_after_seconds=int(server_raw.get("stale_after_seconds", 180)),
-            admin_token=str(os.environ.get("PROBE_ADMIN_TOKEN", server_raw.get("admin_token", ""))),
+            admin_username=str(os.environ.get("PROBE_ADMIN_USERNAME", server_raw.get("admin_username", "admin"))),
+            admin_password=str(os.environ.get("PROBE_ADMIN_PASSWORD", server_raw.get("admin_password", ""))),
+            admin_session_secret=str(
+                os.environ.get("PROBE_ADMIN_SESSION_SECRET", server_raw.get("admin_session_secret", ""))
+            ),
             agents=agents,
         ),
         database=DatabaseSettings(

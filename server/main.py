@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timedelta, timezone
+import hashlib
+import hmac
+import json
 import os
 from pathlib import Path
 import secrets
 import shlex
 import sys
+import time
 from typing import Any
 
 import yaml
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -29,6 +34,8 @@ CONFIG_PATH = Path(os.environ.get("PROBE_CONFIG", DEFAULT_CONFIG_PATH))
 CONFIG = load_config(CONFIG_PATH)
 STORE = MetricStore(CONFIG.database.path)
 NOTIFIER = Notifier(CONFIG.notifier.smtp)
+SESSION_COOKIE = "probe_admin_session"
+SESSION_TTL_SECONDS = 12 * 60 * 60
 
 app = FastAPI(title="Probe", version="0.1.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -68,6 +75,11 @@ class RegisterAgentPayload(BaseModel):
     token: str | None = None
 
 
+class LoginPayload(BaseModel):
+    username: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=1, max_length=256)
+
+
 @app.on_event("startup")
 def startup() -> None:
     STORE.init()
@@ -76,6 +88,53 @@ def startup() -> None:
 
 def current_config():
     return load_config(CONFIG_PATH)
+
+
+def cookie_secure(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    return request.url.scheme == "https" or forwarded_proto == "https"
+
+
+def session_secret() -> bytes:
+    config = current_config()
+    secret = config.server.admin_session_secret or config.server.admin_password
+    if not secret or secret.startswith("change-me-"):
+        raise HTTPException(status_code=503, detail="admin login is not configured")
+    return secret.encode("utf-8")
+
+
+def encode_session(username: str) -> str:
+    payload = {"u": username, "exp": int(time.time()) + SESSION_TTL_SECONDS}
+    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    body = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    sig = hmac.new(session_secret(), body.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{body}.{sig}"
+
+
+def decode_session(value: str | None) -> dict[str, Any] | None:
+    if not value or "." not in value:
+        return None
+    body, sig = value.rsplit(".", 1)
+    expected = hmac.new(session_secret(), body.encode("ascii"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        return None
+    padded = body + ("=" * (-len(body) % 4))
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+    except (ValueError, json.JSONDecodeError):
+        return None
+    if int(payload.get("exp", 0)) < int(time.time()):
+        return None
+    if payload.get("u") != current_config().server.admin_username:
+        return None
+    return payload
+
+
+def require_admin(request: Request) -> str:
+    payload = decode_session(request.cookies.get(SESSION_COOKIE))
+    if not payload:
+        raise HTTPException(status_code=401, detail="login required")
+    return str(payload["u"])
 
 
 def require_agent(payload: ReportPayload, authorization: str | None) -> None:
@@ -153,12 +212,40 @@ def node_history(hostname: str, hours: int = 1) -> dict[str, Any]:
     return {"hostname": hostname, "hours": hours, "points": STORE.history(hostname, hours)}
 
 
-def require_admin(x_admin_token: str | None) -> None:
-    token = current_config().server.admin_token
-    if not token or token == "change-me-admin-token":
-        raise HTTPException(status_code=503, detail="admin token is not configured")
-    if x_admin_token != token:
-        raise HTTPException(status_code=401, detail="invalid admin token")
+@app.get("/api/admin/session")
+def admin_session(request: Request) -> dict[str, Any]:
+    payload = decode_session(request.cookies.get(SESSION_COOKIE))
+    if not payload:
+        return {"authenticated": False}
+    return {"authenticated": True, "username": payload["u"]}
+
+
+@app.post("/api/admin/login")
+def admin_login(payload: LoginPayload, request: Request, response: Response) -> dict[str, Any]:
+    config = current_config()
+    if not config.server.admin_password or config.server.admin_password.startswith("change-me-"):
+        raise HTTPException(status_code=503, detail="admin login is not configured")
+    valid_user = hmac.compare_digest(payload.username, config.server.admin_username)
+    valid_password = hmac.compare_digest(payload.password, config.server.admin_password)
+    if not (valid_user and valid_password):
+        raise HTTPException(status_code=401, detail="invalid username or password")
+
+    response.set_cookie(
+        SESSION_COOKIE,
+        encode_session(payload.username),
+        max_age=SESSION_TTL_SECONDS,
+        httponly=True,
+        secure=cookie_secure(request),
+        samesite="lax",
+        path="/",
+    )
+    return {"ok": True, "username": payload.username}
+
+
+@app.post("/api/admin/logout")
+def admin_logout(response: Response) -> dict[str, Any]:
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return {"ok": True}
 
 
 def write_agent_credential(hostname: str, token: str) -> None:
@@ -190,9 +277,9 @@ def build_install_command(payload: RegisterAgentPayload, token: str) -> str:
 @app.post("/api/admin/agents")
 def register_agent(
     payload: RegisterAgentPayload,
-    x_admin_token: str | None = Header(default=None),
+    request: Request,
 ) -> dict[str, Any]:
-    require_admin(x_admin_token)
+    require_admin(request)
     token = payload.token or secrets.token_hex(32)
     write_agent_credential(payload.hostname, token)
     return {
