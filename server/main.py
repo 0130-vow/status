@@ -76,6 +76,7 @@ class RegisterAgentPayload(BaseModel):
 
 
 class UpdateAgentPayload(BaseModel):
+    name: str = Field(default="", max_length=128)
     services: str = ""
     interval_seconds: int = Field(default=60, ge=5, le=86400)
     public_ip: str = ""
@@ -214,8 +215,15 @@ def admin(request: Request) -> HTMLResponse:
 @app.get("/api/nodes")
 def nodes() -> dict[str, Any]:
     config = current_config()
+    names_by_hostname = {
+        agent.hostname: (agent.name or agent.hostname)
+        for agent in config.server.agents
+    }
+    nodes_list = STORE.list_nodes(config.alert.thresholds, config.server.stale_after_seconds)
+    for node in nodes_list:
+        node["name"] = names_by_hostname.get(node["hostname"], node["name"])
     return {
-        "nodes": STORE.list_nodes(config.alert.thresholds, config.server.stale_after_seconds),
+        "nodes": nodes_list,
         "thresholds": config.alert.thresholds,
         "stale_after_seconds": config.server.stale_after_seconds,
     }
@@ -283,6 +291,7 @@ def write_agent_credential(payload: RegisterAgentPayload, token: str) -> None:
     agents.append(
         {
             "hostname": payload.hostname,
+            "name": payload.hostname,
             "token": token,
             "services": payload.services,
             "interval_seconds": payload.interval_seconds,
@@ -298,6 +307,7 @@ def update_agent_config(hostname: str, payload: UpdateAgentPayload) -> dict[str,
     agents = raw.setdefault("server", {}).setdefault("agents", [])
     for agent in agents:
         if agent.get("hostname") == hostname:
+            agent["name"] = payload.name.strip() or hostname
             agent["services"] = payload.services
             agent["interval_seconds"] = payload.interval_seconds
             agent["public_ip"] = payload.public_ip
@@ -387,6 +397,7 @@ def admin_agents(request: Request) -> dict[str, Any]:
         agents.append(
             {
                 "hostname": agent.hostname,
+                "name": agent.name or agent.hostname,
                 "services": agent.services,
                 "interval_seconds": agent.interval_seconds or 60,
                 "public_ip": agent.public_ip,

@@ -664,6 +664,10 @@ header p {
     grid-template-columns: 2fr 1fr;
 }
 
+.agent-edit-grid label:first-child {
+    grid-column: 1 / -1;
+}
+
 .agent-row-actions {
     margin-top: 14px;
 }

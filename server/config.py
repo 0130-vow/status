@@ -16,6 +16,7 @@ DEFAULT_CONFIG_PATH = ROOT_DIR / "config.yaml"
 class AgentCredential:
     hostname: str
     token: str
+    name: str = ""
     services: str = ""
     interval_seconds: int | None = None
     public_ip: str = ""
@@ -103,6 +104,7 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         AgentCredential(
             hostname=str(item["hostname"]),
             token=str(item["token"]),
+            name=str(item.get("name", "")),
             services=str(item.get("services", "")),
             interval_seconds=int(item["interval_seconds"]) if item.get("interval_seconds") else None,
             public_ip=str(item.get("public_ip", "")),

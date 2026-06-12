@@ -89,7 +89,12 @@ async function loadSession() {
 
 function agentMeta(agent) {
     const node = agent.node || {};
-    return `${node.status || "未上报"} · ${node.ip || "--"} · ${agent.location || node.location || "--"}`;
+    const status = `${node.status || "未上报"} · ${node.ip || "--"} · ${agent.location || node.location || "--"}`;
+    return agent.name && agent.name !== agent.hostname ? `${agent.hostname} · ${status}` : status;
+}
+
+function agentDisplayName(agent) {
+    return agent.name || agent.hostname;
 }
 
 function renderAgentPicker() {
@@ -108,7 +113,7 @@ function renderAgentPicker() {
         row.innerHTML = `
             <input class="agent-select-input" type="checkbox" value="${escapeHtml(agent.hostname)}">
             <span class="agent-picker-main">
-                <span class="agent-name">${escapeHtml(agent.hostname)}</span>
+                <span class="agent-name">${escapeHtml(agentDisplayName(agent))}</span>
                 <span class="agent-meta">${escapeHtml(agentMeta(agent))}</span>
             </span>
             <span class="agent-services-preview">${escapeHtml(agent.services || "未配置服务探活")}</span>
@@ -124,12 +129,16 @@ function renderAgentEditCard(agent) {
     card.innerHTML = `
         <div class="agent-card-header">
             <div>
-                <div class="agent-name">${escapeHtml(agent.hostname)}</div>
+                <div class="agent-name">${escapeHtml(agentDisplayName(agent))}</div>
                 <div class="agent-meta">${escapeHtml(agentMeta(agent))}</div>
             </div>
             <button class="ghost-btn agent-cleanup-btn" type="button">清理命令</button>
         </div>
         <div class="admin-grid agent-edit-grid">
+            <label>
+                <span>节点名称</span>
+                <input class="agent-name-input" type="text" value="${escapeHtml(agentDisplayName(agent))}" placeholder="${escapeHtml(agent.hostname)}">
+            </label>
             <label>
                 <span>服务探活</span>
                 <input class="agent-services-input" type="text" value="${escapeHtml(agent.services || "")}" placeholder="${escapeHtml(defaultServices)}">
@@ -205,6 +214,7 @@ async function loadAgents() {
 
 function readAgentForm(card) {
     return {
+        name: card.querySelector(".agent-name-input").value.trim(),
         services: card.querySelector(".agent-services-input").value.trim(),
         interval_seconds: Number(card.querySelector(".agent-interval-input").value || 60),
         public_ip: card.querySelector(".agent-public-ip-input").value.trim(),
@@ -215,13 +225,20 @@ function readAgentForm(card) {
 async function saveAgent(card) {
     const hostname = card.dataset.hostname;
     const rowStatus = card.querySelector(".agent-row-status");
+    const payload = readAgentForm(card);
     setStatus(rowStatus, "保存中...");
     try {
         const data = await fetchJson(`/api/admin/agents/${encodeURIComponent(hostname)}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(readAgentForm(card)),
+            body: JSON.stringify(payload),
         });
+        const agent = state.agents.find((item) => item.hostname === hostname);
+        if (agent) {
+            Object.assign(agent, payload);
+            card.querySelector(".agent-name").textContent = agentDisplayName(agent);
+            card.querySelector(".agent-meta").textContent = agentMeta(agent);
+        }
         showCommand(`${hostname} 升级/重装命令`, data.install_command);
         setStatus(rowStatus, "已保存，新版 agent 下一轮上报自动生效");
     } catch (error) {
