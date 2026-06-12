@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Probe Admin</title>
-    <link rel="stylesheet" href="/static/style.css?v=agent-name-1">
+    <link rel="stylesheet" href="/static/style.css?v=node-table-1">
 </head>
 <body>
     <div class="container admin-container">
@@ -38,13 +38,14 @@
         </section>
 
         <section id="agent-panel" hidden>
-            <section class="admin-panel">
+            <section class="admin-panel" id="create-agent-panel" hidden>
                 <div class="detail-section-header">
                     <h4>新增 Agent</h4>
+                    <button id="close-create-btn" class="ghost-btn" type="button">收起</button>
                 </div>
                 <div class="admin-grid">
                     <label>
-                        <span>节点名称</span>
+                        <span>节点标识</span>
                         <input id="hostname" type="text" placeholder="node-02">
                     </label>
                     <label>
@@ -76,17 +77,30 @@
             </section>
 
             <section class="admin-panel">
-                <div class="detail-section-header">
-                    <h4>已添加节点</h4>
-                    <button id="refresh-agents-btn" class="ghost-btn">刷新</button>
+                <div class="node-manager-header">
+                    <h4>节点管理</h4>
+                    <div class="node-manager-actions">
+                        <button id="refresh-agents-btn" class="ghost-btn" type="button">刷新</button>
+                        <button id="open-create-btn" class="primary-btn" type="button">+ 新增 Agent</button>
+                    </div>
                 </div>
-                <div class="agent-picker" id="agent-picker"></div>
-                <div class="admin-actions agent-picker-actions" id="agent-picker-actions">
-                    <button id="edit-selected-btn" class="primary-btn" type="button">进入编辑</button>
-                    <span id="agent-picker-status"></span>
+                <div class="node-table-wrap">
+                    <table class="node-table">
+                        <thead>
+                            <tr>
+                                <th>节点名称</th>
+                                <th>公网 IP</th>
+                                <th>状态</th>
+                                <th>操作系统</th>
+                                <th>物理位置</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="agent-table-body"></tbody>
+                    </table>
                 </div>
-                <div class="agent-list" id="agent-list"></div>
                 <div class="empty" id="agent-empty" hidden>暂无已添加节点</div>
+                <div class="agent-list" id="agent-list"></div>
             </section>
 
             <div class="command-box" id="command-box" hidden>
@@ -99,6 +113,6 @@
         </section>
     </div>
 
-    <script src="/static/admin.js?v=agent-name-1"></script>
+    <script src="/static/admin.js?v=node-table-1"></script>
 </body>
 </html>

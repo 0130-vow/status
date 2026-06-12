@@ -1,5 +1,6 @@
 const loginPanel = document.getElementById("login-panel");
 const agentPanel = document.getElementById("agent-panel");
+const createAgentPanel = document.getElementById("create-agent-panel");
 const usernameInput = document.getElementById("admin-username");
 const passwordInput = document.getElementById("admin-password");
 const loginStatusEl = document.getElementById("login-status");
@@ -10,9 +11,7 @@ const servicesInput = document.getElementById("services");
 const publicIpInput = document.getElementById("public-ip");
 const locationInput = document.getElementById("location");
 const statusEl = document.getElementById("admin-status");
-const agentPicker = document.getElementById("agent-picker");
-const agentPickerActions = document.getElementById("agent-picker-actions");
-const agentPickerStatus = document.getElementById("agent-picker-status");
+const agentTableBody = document.getElementById("agent-table-body");
 const agentList = document.getElementById("agent-list");
 const agentEmpty = document.getElementById("agent-empty");
 const commandBox = document.getElementById("command-box");
@@ -24,7 +23,7 @@ const defaultServices = "广东电信:202.96.128.86:53,广东移动:211.136.192.
 
 const state = {
     agents: [],
-    editingHosts: new Set(),
+    editingHostname: "",
 };
 
 serverUrlInput.value = window.location.origin;
@@ -61,6 +60,7 @@ function setLoggedIn(username) {
 function setLoggedOut() {
     loginPanel.hidden = false;
     agentPanel.hidden = true;
+    createAgentPanel.hidden = true;
     sessionUserEl.textContent = "";
     sessionUserEl.hidden = true;
     logoutBtn.hidden = true;
@@ -87,42 +87,68 @@ async function loadSession() {
     }
 }
 
-function agentMeta(agent) {
-    const node = agent.node || {};
-    const status = `${node.status || "未上报"} · ${node.ip || "--"} · ${agent.location || node.location || "--"}`;
-    return agent.name && agent.name !== agent.hostname ? `${agent.hostname} · ${status}` : status;
-}
-
 function agentDisplayName(agent) {
     return agent.name || agent.hostname;
 }
 
-function renderAgentPicker() {
-    const hasAgents = state.agents.length > 0;
-    agentPicker.hidden = !hasAgents || state.editingHosts.size > 0;
-    agentPickerActions.hidden = !hasAgents || state.editingHosts.size > 0;
-    agentEmpty.hidden = hasAgents;
-    agentPicker.innerHTML = "";
-    setStatus(agentPickerStatus, "");
+function nodeStatus(agent) {
+    return agent.node?.status || "unknown";
+}
 
-    if (!hasAgents || state.editingHosts.size > 0) return;
+function statusText(status) {
+    if (status === "online") return "运行中";
+    if (status === "offline") return "已离线";
+    if (status === "warn") return "异常";
+    return "未上报";
+}
+
+function agentLocation(agent) {
+    return agent.location || agent.node?.location || "--";
+}
+
+function renderAgentRows() {
+    agentTableBody.innerHTML = "";
+    agentEmpty.hidden = state.agents.length > 0;
 
     state.agents.forEach((agent) => {
-        const row = document.createElement("label");
-        row.className = "agent-picker-row";
+        const node = agent.node || {};
+        const status = nodeStatus(agent);
+        const row = document.createElement("tr");
+        row.dataset.hostname = agent.hostname;
         row.innerHTML = `
-            <input class="agent-select-input" type="checkbox" value="${escapeHtml(agent.hostname)}">
-            <span class="agent-picker-main">
-                <span class="agent-name">${escapeHtml(agentDisplayName(agent))}</span>
-                <span class="agent-meta">${escapeHtml(agentMeta(agent))}</span>
-            </span>
-            <span class="agent-services-preview">${escapeHtml(agent.services || "未配置服务探活")}</span>
+            <td>
+                <div class="node-name-cell">${escapeHtml(agentDisplayName(agent))}</div>
+                ${agent.name && agent.name !== agent.hostname ? `<div class="node-hostname-cell">${escapeHtml(agent.hostname)}</div>` : ""}
+            </td>
+            <td>${escapeHtml(agent.public_ip || node.ip || "--")}</td>
+            <td><span class="status-pill ${escapeHtml(status)}"><span></span>${escapeHtml(statusText(status))}</span></td>
+            <td>${escapeHtml(node.os || "--")}</td>
+            <td>${escapeHtml(agentLocation(agent))}</td>
+            <td>
+                <div class="table-actions">
+                    <button class="link-btn agent-edit-btn" type="button">编辑</button>
+                    <button class="link-btn danger-link agent-delete-btn" type="button">删除</button>
+                </div>
+            </td>
         `;
-        agentPicker.appendChild(row);
+        row.querySelector(".agent-edit-btn").addEventListener("click", () => editAgent(agent.hostname));
+        row.querySelector(".agent-delete-btn").addEventListener("click", () => deleteAgent(agent.hostname));
+        agentTableBody.appendChild(row);
     });
 }
 
-function renderAgentEditCard(agent) {
+function renderEditForm() {
+    agentList.innerHTML = "";
+    agentList.hidden = !state.editingHostname;
+    if (!state.editingHostname) return;
+
+    const agent = state.agents.find((item) => item.hostname === state.editingHostname);
+    if (!agent) {
+        state.editingHostname = "";
+        agentList.hidden = true;
+        return;
+    }
+
     const card = document.createElement("div");
     card.className = "agent-card";
     card.dataset.hostname = agent.hostname;
@@ -130,7 +156,7 @@ function renderAgentEditCard(agent) {
         <div class="agent-card-header">
             <div>
                 <div class="agent-name">${escapeHtml(agentDisplayName(agent))}</div>
-                <div class="agent-meta">${escapeHtml(agentMeta(agent))}</div>
+                <div class="agent-meta">${escapeHtml(agent.hostname)} · ${escapeHtml(agent.node?.ip || "--")} · ${escapeHtml(agentLocation(agent))}</div>
             </div>
             <button class="ghost-btn agent-cleanup-btn" type="button">清理命令</button>
         </div>
@@ -157,9 +183,9 @@ function renderAgentEditCard(agent) {
             </label>
         </div>
         <div class="admin-actions agent-row-actions">
-            <button class="primary-btn agent-save-btn" type="button">保存探活</button>
+            <button class="primary-btn agent-save-btn" type="button">保存</button>
             <button class="ghost-btn agent-upgrade-btn" type="button">升级命令</button>
-            <button class="ghost-btn agent-delete-btn danger-btn" type="button">删除节点</button>
+            <button class="ghost-btn agent-cancel-btn" type="button">取消</button>
             <span class="agent-row-status"></span>
         </div>
     `;
@@ -171,45 +197,31 @@ function renderAgentEditCard(agent) {
     card.querySelector(".agent-cleanup-btn").addEventListener("click", () => {
         showCommand(`${agent.hostname} 探针清理命令`, agent.uninstall_command);
     });
-    card.querySelector(".agent-delete-btn").addEventListener("click", () => deleteAgent(card));
-    return card;
-}
-
-function renderEditingAgents() {
-    agentList.innerHTML = "";
-    agentList.hidden = state.editingHosts.size === 0;
-    if (!state.editingHosts.size) return;
-
-    const selectedAgents = state.agents.filter((agent) => state.editingHosts.has(agent.hostname));
-    const toolbar = document.createElement("div");
-    toolbar.className = "agent-edit-toolbar";
-    toolbar.innerHTML = `
-        <span>正在编辑 ${selectedAgents.length} 个节点</span>
-        <button id="back-to-agent-picker" class="ghost-btn" type="button">返回选择</button>
-    `;
-    toolbar.querySelector("#back-to-agent-picker").addEventListener("click", () => {
-        state.editingHosts.clear();
-        renderAgentPicker();
-        renderEditingAgents();
+    card.querySelector(".agent-cancel-btn").addEventListener("click", () => {
+        state.editingHostname = "";
+        renderEditForm();
     });
-    agentList.appendChild(toolbar);
-
-    selectedAgents.forEach((agent) => {
-        agentList.appendChild(renderAgentEditCard(agent));
-    });
+    agentList.appendChild(card);
 }
 
 function renderAgents(agents) {
     state.agents = agents;
-    const hostnames = new Set(agents.map((agent) => agent.hostname));
-    state.editingHosts = new Set([...state.editingHosts].filter((hostname) => hostnames.has(hostname)));
-    renderAgentPicker();
-    renderEditingAgents();
+    if (state.editingHostname && !agents.some((agent) => agent.hostname === state.editingHostname)) {
+        state.editingHostname = "";
+    }
+    renderAgentRows();
+    renderEditForm();
 }
 
 async function loadAgents() {
     const data = await fetchJson("/api/admin/agents");
     renderAgents(data.agents || []);
+}
+
+function editAgent(hostname) {
+    state.editingHostname = hostname;
+    renderEditForm();
+    agentList.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function readAgentForm(card) {
@@ -237,7 +249,7 @@ async function saveAgent(card) {
         if (agent) {
             Object.assign(agent, payload);
             card.querySelector(".agent-name").textContent = agentDisplayName(agent);
-            card.querySelector(".agent-meta").textContent = agentMeta(agent);
+            renderAgentRows();
         }
         showCommand(`${hostname} 升级/重装命令`, data.install_command);
         setStatus(rowStatus, "已保存，新版 agent 下一轮上报自动生效");
@@ -246,20 +258,17 @@ async function saveAgent(card) {
     }
 }
 
-async function deleteAgent(card) {
-    const hostname = card.dataset.hostname;
-    const rowStatus = card.querySelector(".agent-row-status");
+async function deleteAgent(hostname) {
     if (!window.confirm(`确认删除节点 ${hostname}？主控会移除凭据和历史数据。`)) return;
 
-    setStatus(rowStatus, "删除中...");
     try {
         const data = await fetchJson(`/api/admin/agents/${encodeURIComponent(hostname)}`, { method: "DELETE" });
-        state.editingHosts.delete(hostname);
+        if (state.editingHostname === hostname) state.editingHostname = "";
         showCommand(`${hostname} 探针清理命令`, data.uninstall_command);
         setStatus(statusEl, `已删除 ${hostname}`);
         await loadAgents();
     } catch (error) {
-        setStatus(rowStatus, error.message, true);
+        setStatus(statusEl, error.message, true);
     }
 }
 
@@ -290,25 +299,23 @@ logoutBtn.addEventListener("click", async () => {
     setLoggedOut();
 });
 
-document.getElementById("refresh-agents-btn").addEventListener("click", () => {
-    loadAgents().catch((error) => setStatus(statusEl, error.message, true));
+document.getElementById("open-create-btn").addEventListener("click", () => {
+    createAgentPanel.hidden = false;
+    createAgentPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
-document.getElementById("edit-selected-btn").addEventListener("click", () => {
-    const selected = [...agentPicker.querySelectorAll(".agent-select-input:checked")].map((input) => input.value);
-    if (!selected.length) {
-        setStatus(agentPickerStatus, "请先勾选需要编辑的节点", true);
-        return;
-    }
-    state.editingHosts = new Set(selected);
-    renderAgentPicker();
-    renderEditingAgents();
+document.getElementById("close-create-btn").addEventListener("click", () => {
+    createAgentPanel.hidden = true;
+});
+
+document.getElementById("refresh-agents-btn").addEventListener("click", () => {
+    loadAgents().catch((error) => setStatus(statusEl, error.message, true));
 });
 
 document.getElementById("register-btn").addEventListener("click", async () => {
     const hostname = hostnameInput.value.trim();
     if (!hostname) {
-        setStatus(statusEl, "请填写节点名称", true);
+        setStatus(statusEl, "请填写节点标识", true);
         return;
     }
 
