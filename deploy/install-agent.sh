@@ -141,6 +141,23 @@ bootstrap_pip() {
   rm -f "$tmp_get_pip"
 }
 
+install_build_deps() {
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update
+    apt-get install -y build-essential python3-dev
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y gcc python3-devel
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y gcc python3-devel
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache gcc python3-dev musl-dev linux-headers
+  elif command -v zypper >/dev/null 2>&1; then
+    zypper --non-interactive install gcc python3-devel
+  else
+    return 1
+  fi
+}
+
 if ! python3 -m pip --version >/dev/null 2>&1; then
   bootstrap_pip
 fi
@@ -152,7 +169,11 @@ PIP_FLAGS=()
 if python3 -m pip install --help 2>/dev/null | grep -q -- "--break-system-packages"; then
   PIP_FLAGS+=(--break-system-packages)
 fi
-python3 -m pip install "${PIP_FLAGS[@]}" --upgrade psutil==6.1.1 requests==2.32.3
+if ! python3 -m pip install "${PIP_FLAGS[@]}" --upgrade psutil==6.1.1 requests==2.32.3; then
+  echo "Python dependency install failed. Installing build dependencies and retrying..." >&2
+  install_build_deps
+  python3 -m pip install "${PIP_FLAGS[@]}" --upgrade psutil==6.1.1 requests==2.32.3
+fi
 
 cat > "$CONFIG_PATH" <<EOF
 [server]
