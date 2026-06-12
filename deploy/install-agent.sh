@@ -89,23 +89,70 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 is required" >&2
-  exit 1
-fi
-
-if ! python3 -m pip --version >/dev/null 2>&1; then
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update
-    apt-get install -y python3-pip
+    apt-get install -y python3
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y python3
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y python3
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache python3
+  elif command -v zypper >/dev/null 2>&1; then
+    zypper --non-interactive install python3
   else
-    echo "python3-pip is required. Install pip first, then rerun this script." >&2
+    echo "python3 is required and no supported package manager was found." >&2
     exit 1
   fi
 fi
 
+install_pip_with_package_manager() {
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update
+    apt-get install -y python3-pip python3-venv
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y python3-pip
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y python3-pip
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache py3-pip
+  elif command -v zypper >/dev/null 2>&1; then
+    zypper --non-interactive install python3-pip
+  else
+    return 1
+  fi
+}
+
+bootstrap_pip() {
+  python3 -m ensurepip --upgrade >/dev/null 2>&1 && return 0
+  install_pip_with_package_manager >/dev/null 2>&1 && return 0
+
+  tmp_get_pip="$(mktemp)"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL https://bootstrap.pypa.io/get-pip.py -o "$tmp_get_pip"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$tmp_get_pip" https://bootstrap.pypa.io/get-pip.py
+  else
+    echo "curl or wget is required to bootstrap pip." >&2
+    rm -f "$tmp_get_pip"
+    return 1
+  fi
+  python3 "$tmp_get_pip"
+  rm -f "$tmp_get_pip"
+}
+
+if ! python3 -m pip --version >/dev/null 2>&1; then
+  bootstrap_pip
+fi
+
 mkdir -p "$INSTALL_DIR"
 curl -fsSL "$REPO_RAW/agent/agent.py" -o "$INSTALL_DIR/agent.py"
-python3 -m pip install --upgrade psutil==6.1.1 requests==2.32.3
+
+PIP_FLAGS=()
+if python3 -m pip install --help 2>/dev/null | grep -q -- "--break-system-packages"; then
+  PIP_FLAGS+=(--break-system-packages)
+fi
+python3 -m pip install "${PIP_FLAGS[@]}" --upgrade psutil==6.1.1 requests==2.32.3
 
 cat > "$CONFIG_PATH" <<EOF
 [server]

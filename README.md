@@ -85,6 +85,8 @@ curl -fsSL https://raw.githubusercontent.com/0130-vow/status/main/deploy/install
   --services "ssh:22,nginx:80"
 ```
 
+安装脚本会自动处理 `python3`、`pip`、`psutil`、`requests` 等 Agent 依赖，并创建 `probe-agent.service`。
+
 也可以在管理界面生成安装命令：
 
 ```text
