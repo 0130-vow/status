@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Probe - 极简监控探针</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>System Overview</h1>
+            <p id="clock">Syncing...</p>
+        </header>
+        <div class="grid" id="server-grid"></div>
+        <div class="empty" id="empty-state">暂无节点数据</div>
+    </div>
+
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close" id="modal-close" aria-label="关闭">x</button>
+            <div class="modal-title" id="m-title"></div>
+
+            <div class="detail-section">
+                <div class="detail-section-header"><h4>基础信息</h4></div>
+                <div class="info-grid">
+                    <div class="info-item"><span>系统环境</span><div id="m-os">--</div></div>
+                    <div class="info-item"><span>节点 IP</span><div id="m-ip">--</div></div>
+                    <div class="info-item"><span>CPU 架构</span><div id="m-cpu">--</div></div>
+                    <div class="info-item"><span>物理位置</span><div id="m-loc">--</div></div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-header">
+                    <h4>历史指标</h4>
+                    <div class="time-toggles">
+                        <button class="time-btn active" data-hours="1">1 小时</button>
+                        <button class="time-btn" data-hours="6">6 小时</button>
+                        <button class="time-btn" data-hours="24">24 小时</button>
+                    </div>
+                </div>
+                <div class="network-module">
+                    <div class="chart-container">
+                        <canvas id="metricChart"></canvas>
+                    </div>
+                    <div class="ping-list" id="m-services"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

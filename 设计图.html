@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Status Pro Max - 极简监控探针</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #fafafa;
+            --card-bg: #ffffff;
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --bar-bg: #f3f4f6;
+            --bar-fill: #374151;
+            --status-up: #10b981;
+            --status-down: #ef4444;
+            --status-warn: #f59e0b;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body { font-family: var(--font-family); background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 40px 20px; display: flex; justify-content: center; }
+        .container { max-width: 1000px; width: 100%; }
+
+        header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); }
+        header h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.5px; }
+        header p { margin: 0; color: var(--text-muted); font-size: 13px; }
+
+        /* 卡片网格 */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.04); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .server-name { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--status-up); box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); }
+        .status-dot.warn { background-color: var(--status-warn); box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2); }
+        .status-dot.offline { background-color: var(--status-down); box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2); }
+        .uptime { font-size: 12px; color: var(--text-muted); background: var(--bar-bg); padding: 2px 8px; border-radius: 10px; }
+
+        .stat-row { margin-bottom: 14px; }
+        .stat-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+        .stat-value { font-weight: 500; font-variant-numeric: tabular-nums; }
+        .progress-bar { height: 4px; background-color: var(--bar-bg); border-radius: 2px; overflow: hidden; }
+        .progress-fill { height: 100%; background-color: var(--bar-fill); border-radius: 2px; transition: width 0.4s ease; }
+
+        .network-speeds { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border-color); font-variant-numeric: tabular-nums; }
+        .traffic-total { display: flex; justify-content: space-between; font-size: 11px; color: #9ca3af; margin-top: 6px; }
+        .offline-card { opacity: 0.6; }
+        .offline-card .progress-fill { background-color: var(--border-color) !important; }
+
+        /* 弹窗 */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.2); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 100; }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal-content { background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; width: 90%; max-width: 650px; padding: 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.08); position: relative; max-height: 90vh; overflow-y: auto; }
+        .modal-close { position: absolute; top: 20px; right: 20px; background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; }
+        .modal-title { font-size: 18px; font-weight: 600; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; }
+        
+        .detail-section { margin-bottom: 25px; }
+        .detail-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .detail-section h4 { margin: 0; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px; background: var(--bg-color); padding: 12px; border-radius: 6px; }
+        .info-item span { color: var(--text-muted); }
+        .info-item div { font-weight: 500; margin-top: 2px; }
+
+        /* 合并后的网络模块 */
+        .network-module { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+        .chart-container { position: relative; height: 180px; width: 100%; padding: 15px; box-sizing: border-box; }
+        
+        .time-toggles { display: flex; gap: 4px; background: var(--bar-bg); padding: 4px; border-radius: 6px; }
+        .time-btn { background: transparent; border: none; padding: 4px 12px; font-size: 11px; color: var(--text-muted); border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+        .time-btn.active { background: #ffffff; color: var(--text-main); font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+        .ping-list { display: flex; flex-direction: column; background: var(--bg-color); border-top: 1px solid var(--border-color); }
+        .ping-row { display: grid; grid-template-columns: 2fr 1fr 2fr 1fr; align-items: center; font-size: 12px; padding: 8px 15px; border-bottom: 1px solid var(--border-color); }
+        .ping-row:last-child { border-bottom: none; }
+        .ping-header { background: #f9fafb; font-weight: 600; color: var(--text-muted); text-transform: uppercase; font-size: 11px; }
+        .p-type { display: inline-block; padding: 2px 6px; background: #e5e7eb; border-radius: 4px; font-size: 10px; color: #4b5563; }
+        .p-region { color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+        .p-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+        .ping-good { color: var(--status-up); }
+        .ping-warn { color: var(--status-warn); }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>System Overview</h1>
+            <p id="clock">Syncing...</p>
+        </header>
+        <div class="grid" id="server-grid"></div>
+    </div>
+
+    <div class="modal-overlay" id="modal-overlay" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeModal()">✕</button>
+            <div class="modal-title" id="m-title"></div>
+            
+            <div class="detail-section">
+                <div class="detail-section-header"><h4>基础信息</h4></div>
+                <div class="info-grid">
+                    <div class="info-item"><span>系统环境</span><div id="m-os">--</div></div>
+                    <div class="info-item"><span>公网 IP</span><div id="m-ip">--</div></div>
+                    <div class="info-item"><span>CPU 架构</span><div id="m-cpu">--</div></div>
+                    <div class="info-item"><span>物理位置</span><div id="m-loc">--</div></div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-header">
+                    <h4>网络延迟监控</h4>
+                    <div class="time-toggles">
+                        <button class="time-btn active" onclick="switchChart('1h', this)">1 小时</button>
+                        <button class="time-btn" onclick="switchChart('6h', this)">6 小时</button>
+                        <button class="time-btn" onclick="switchChart('1d', this)">24 小时</button>
+                    </div>
+                </div>
+                
+                <div class="network-module">
+                    <div class="chart-container">
+                        <canvas id="latencyChart"></canvas>
+                    </div>
+                    
+                    <div class="ping-list" id="m-pings"></div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        // 极简风格颜色池，用于区分不同的探测节点
+        const CHART_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899'];
+
+        // 1. 重构数据结构：历史数据 (history) 移入每个单独的节点中
+        const serversData = [
+            {
+                id: "node-01", name: "Tokyo-Node-01", status: "online", uptime: "42d 12h",
+                os: "Ubuntu 24.04", ip: "192.0.2.55", cpuModel: "AMD EPYC 7003", location: "日本 · 东京",
+                cpu: 12, ram: 60, ramText: "1.2 / 2.0 GB", disk: 34, diskText: "17 / 50 GB", trafficIn: "1.42 TB", trafficOut: "820 GB",
+                networkNodes: [
+                    { 
+                        name: "阿里云 BGP", type: "TCP", region: "CN-Hangzhou", latency: 45,
+                        history: {
+                            '1h': Array.from({length: 60}, () => Math.floor(Math.random() * 5 + 40)), 
+                            '6h': Array.from({length: 60}, () => Math.floor(Math.random() * 10 + 40)),
+                            '1d': Array.from({length: 24}, () => Math.floor(Math.random() * 20 + 35))
+                        }
+                    },
+                    { 
+                        name: "Cloudflare", type: "ICMP", region: "Global", latency: 5,
+                        history: {
+                            '1h': Array.from({length: 60}, () => Math.floor(Math.random() * 2 + 4)), 
+                            '6h': Array.from({length: 60}, () => Math.floor(Math.random() * 4 + 4)),
+                            '1d': Array.from({length: 24}, () => Math.floor(Math.random() * 5 + 3))
+                        }
+                    },
+                    { 
+                        name: "Google DNS", type: "UDP", region: "AP-Tokyo", latency: 2,
+                        history: {
+                            '1h': Array.from({length: 60}, () => Math.floor(Math.random() * 2 + 1)), 
+                            '6h': Array.from({length: 60}, () => Math.floor(Math.random() * 3 + 1)),
+                            '1d': Array.from({length: 24}, () => Math.floor(Math.random() * 3 + 1))
+                        }
+                    }
+                ]
+            },
+            {
+                id: "node-02", name: "HK-Database-Main", status: "warn", uptime: "120d 05h",
+                os: "Debian 12", ip: "198.51.100.42", cpuModel: "Intel Xeon Platinum", location: "中国 · 香港",
+                cpu: 85, ram: 90, ramText: "14.5 / 16.0 GB", disk: 78, diskText: "390 / 500 GB", trafficIn: "12.5 TB", trafficOut: "45.2 TB",
+                networkNodes: [
+                    { 
+                        name: "腾讯云 直连", type: "TCP", region: "CN-Shenzhen", latency: 12,
+                        history: { '1h': Array.from({length: 60}, () => Math.floor(Math.random() * 5 + 10)), '6h': Array.from({length: 60}, () => Math.floor(Math.random() * 15 + 10)), '1d': Array.from({length: 24}, () => Math.floor(Math.random() * 10 + 10)) }
+                    },
+                    { 
+                        name: "AWS Anycast", type: "ICMP", region: "Global", latency: 8,
+                        history: { '1h': Array.from({length: 60}, () => Math.floor(Math.random() * 4 + 6)), '6h': Array.from({length: 60}, () => Math.floor(Math.random() * 8 + 6)), '1d': Array.from({length: 24}, () => Math.floor(Math.random() * 5 + 7)) }
+                    }
+                ]
+            },
+            {
+                id: "node-03", name: "US-Backup-01", status: "offline", uptime: "Offline",
+                os: "Rocky Linux 9", ip: "203.0.113.11", cpuModel: "Intel Xeon E-2288G", location: "美国 · 硅谷",
+                cpu: 0, ram: 0, ramText: "-- / -- GB", disk: 0, diskText: "-- / -- GB", trafficIn: "--", trafficOut: "--",
+                networkNodes: [
+                    { 
+                        name: "中国电信 CN2", type: "TCP", region: "CN-Shanghai", latency: "Timeout",
+                        history: { '1h': Array.from({length: 60}, () => 0), '6h': Array.from({length: 60}, () => 0), '1d': Array.from({length: 24}, () => 0) }
+                    }
+                ]
+            }
+        ];
+
+        function renderCards() {
+            const grid = document.getElementById('server-grid');
+            grid.innerHTML = '';
+            
+            serversData.forEach(server => {
+                const isOff = server.status === 'offline';
+                const sClass = server.status === 'warn' ? 'warn' : (isOff ? 'offline' : '');
+                
+                const card = document.createElement('div');
+                card.className = `card ${isOff ? 'offline-card' : ''}`;
+                card.onclick = () => openModal(server);
+
+                card.innerHTML = `
+                    <div class="card-header">
+                        <div class="server-name"><div class="status-dot ${sClass}"></div>${server.name}</div>
+                        <div class="uptime" style="${isOff ? 'color:var(--status-down); background:rgba(239,68,68,0.1)' : ''}">${server.uptime}</div>
+                    </div>
+                    <div class="stat-row">
+                        <div class="stat-label"><span>CPU</span><span class="stat-value" id="cpu-val-${server.id}">${isOff ? '--' : server.cpu + '%'}</span></div>
+                        <div class="progress-bar"><div class="progress-fill" id="cpu-bar-${server.id}" style="width: ${server.cpu}%; ${server.status === 'warn' ? 'background-color: var(--status-warn);' : ''}"></div></div>
+                    </div>
+                    <div class="stat-row">
+                        <div class="stat-label"><span>内存</span><span class="stat-value">${server.ramText}</span></div>
+                        <div class="progress-bar"><div class="progress-fill" style="width: ${server.ram}%; ${server.ram > 85 ? 'background-color: var(--status-down);' : ''}"></div></div>
+                    </div>
+                    <div class="stat-row">
+                        <div class="stat-label"><span>磁盘</span><span class="stat-value">${server.diskText}</span></div>
+                        <div class="progress-bar"><div class="progress-fill" style="width: ${server.disk}%;"></div></div>
+                    </div>
+                    <div class="network-speeds">
+                        <span>↑ <b id="up-${server.id}">${isOff ? '0.00' : '1.20'}</b> MB/s</span>
+                        <span>↓ <b id="down-${server.id}">${isOff ? '0.00' : '3.45'}</b> MB/s</span>
+                    </div>
+                    <div class="traffic-total"><span>总入: ${server.trafficIn}</span><span>总出: ${server.trafficOut}</span></div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        let activeServer = null;
+        let chartInstance = null;
+        let currentRange = '1h';
+
+        function openModal(server) {
+            activeServer = server;
+            const overlay = document.getElementById('modal-overlay');
+            const sClass = server.status === 'warn' ? 'warn' : (server.status === 'offline' ? 'offline' : '');
+            
+            document.getElementById('m-title').innerHTML = `<div class="status-dot ${sClass}"></div> ${server.name}`;
+            document.getElementById('m-os').textContent = server.os;
+            document.getElementById('m-ip').textContent = server.ip;
+            document.getElementById('m-cpu').textContent = server.cpuModel;
+            document.getElementById('m-loc').textContent = server.location;
+            
+            updatePingUI(server);
+            
+            document.querySelectorAll('.time-btn').forEach((btn, idx) => {
+                btn.classList.toggle('active', idx === 0);
+            });
+            currentRange = '1h';
+            
+            // 渲染多线图表
+            renderMultiLineChart(currentRange);
+
+            overlay.classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.remove('active');
+            activeServer = null;
+        }
+
+        function updatePingUI(server) {
+            const container = document.getElementById('m-pings');
+            container.innerHTML = `
+                <div class="ping-row ping-header">
+                    <div>探测节点</div><div>类型</div><div>地区</div><div style="text-align: right;">当前延迟</div>
+                </div>
+            `;
+            
+            server.networkNodes.forEach((node, index) => {
+                let valClass = 'ping-good';
+                if (typeof node.latency === 'number' && node.latency > 100) valClass = 'ping-warn';
+                if (node.latency === 'Timeout') valClass = 'offline';
+                
+                const unit = typeof node.latency === 'number' ? ' ms' : '';
+                // 列表名称前加一个小色块，与图表中的线颜色对应
+                const colorMarker = server.status === 'offline' ? '#9ca3af' : CHART_COLORS[index % CHART_COLORS.length];
+
+                container.innerHTML += `
+                    <div class="ping-row">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="width:8px; height:8px; border-radius:50%; background:${colorMarker};"></span>
+                            ${node.name}
+                        </div>
+                        <div><span class="p-type">${node.type}</span></div>
+                        <div class="p-region">🌎 ${node.region}</div>
+                        <div class="p-val ${valClass}" id="ping-val-${index}">${node.latency}${unit}</div>
+                    </div>
+                `;
+            });
+        }
+
+        function switchChart(range, btnElement) {
+            if(!activeServer) return;
+            currentRange = range;
+            
+            document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+            
+            renderMultiLineChart(range);
+        }
+
+        // 核心改动：渲染多条折线
+        function renderMultiLineChart(range) {
+            const ctx = document.getElementById('latencyChart').getContext('2d');
+            
+            // 获取X轴坐标数量（取第一个节点的数据长度）
+            const dataLength = activeServer.networkNodes[0].history[range].length;
+            const labels = Array.from({length: dataLength}, (_, i) => i);
+            
+            const isOffline = activeServer.status === 'offline';
+
+            // 构造 Chart.js 的 datasets 数组
+            const datasets = activeServer.networkNodes.map((node, index) => {
+                const color = isOffline ? '#9ca3af' : CHART_COLORS[index % CHART_COLORS.length];
+                return {
+                    label: node.name,
+                    data: node.history[range],
+                    borderColor: color,
+                    backgroundColor: 'transparent', // 多线图表去除填充，保持极简
+                    borderWidth: 2,
+                    tension: 0.4, // 平滑曲线
+                    pointRadius: 0,
+                    pointHoverRadius: 4
+                };
+            });
+
+            if (chartInstance) chartInstance.destroy();
+            Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        // 开启极简图例
+                        legend: { 
+                            display: true, 
+                            position: 'top', 
+                            align: 'end',
+                            labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 10 } } 
+                        }, 
+                        // 多点联合 Tooltip
+                        tooltip: { mode: 'index', intersect: false } 
+                    },
+                    scales: {
+                        x: { display: false }, // 隐藏X轴网格
+                        y: {
+                            border: { display: false },
+                            grid: { color: '#f3f4f6' },
+                            beginAtZero: true,
+                            ticks: { font: { size: 10 }, color: '#9ca3af', maxTicksLimit: 5 }
+                        }
+                    },
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false }
+                }
+            });
+        }
+
+        // 定时器模拟实时波动
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('clock').textContent = 'Last sync: ' + now.toLocaleTimeString('en-US', { hour12: false });
+        }, 1000);
+
+        setInterval(() => {
+            serversData.forEach(server => {
+                if (server.status === 'offline') return;
+
+                server.cpu = Math.max(5, Math.min(95, server.cpu + (Math.floor(Math.random() * 11) - 5)));
+                const cpuValEl = document.getElementById(`cpu-val-${server.id}`);
+                const cpuBarEl = document.getElementById(`cpu-bar-${server.id}`);
+                if (cpuValEl) cpuValEl.textContent = server.cpu + '%';
+                if (cpuBarEl) cpuBarEl.style.width = server.cpu + '%';
+
+                const upEl = document.getElementById(`up-${server.id}`);
+                const downEl = document.getElementById(`down-${server.id}`);
+                if (upEl) upEl.textContent = (Math.random() * (server.id === 'node-02' ? 15 : 2)).toFixed(2);
+                if (downEl) downEl.textContent = (Math.random() * (server.id === 'node-02' ? 40 : 5)).toFixed(2);
+
+                // 模拟网络节点延迟波动
+                server.networkNodes.forEach((node, index) => {
+                    if (typeof node.latency === 'number') {
+                        node.latency = Math.max(1, node.latency + (Math.floor(Math.random() * 5) - 2));
+                        
+                        if (activeServer && activeServer.id === server.id) {
+                            const pEl = document.getElementById(`ping-val-${index}`);
+                            if(pEl) pEl.textContent = node.latency + ' ms';
+                        }
+                    }
+                });
+            });
+        }, 2000);
+
+        renderCards();
+    </script>
+</body>
+</html>
