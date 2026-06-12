@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Probe Admin</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container admin-container">
+        <header>
+            <div>
+                <h1>Admin</h1>
+                <p>Agent registration</p>
+            </div>
+            <nav class="header-actions">
+                <a href="/">Overview</a>
+            </nav>
+        </header>
+
+        <section class="admin-panel">
+            <div class="admin-grid">
+                <label>
+                    <span>管理 token</span>
+                    <input id="admin-token" type="password" autocomplete="current-password">
+                </label>
+                <label>
+                    <span>节点名称</span>
+                    <input id="hostname" type="text" placeholder="node-02">
+                </label>
+                <label>
+                    <span>主控地址</span>
+                    <input id="server-url" type="url">
+                </label>
+                <label>
+                    <span>上报间隔</span>
+                    <input id="interval" type="number" min="5" value="60">
+                </label>
+                <label>
+                    <span>服务探活</span>
+                    <input id="services" type="text" value="ssh:22">
+                </label>
+                <label>
+                    <span>位置</span>
+                    <input id="location" type="text" placeholder="Tokyo">
+                </label>
+            </div>
+
+            <div class="admin-actions">
+                <button id="register-btn" class="primary-btn">生成安装命令</button>
+                <span id="admin-status"></span>
+            </div>
+
+            <div class="command-box" id="command-box" hidden>
+                <div class="detail-section-header">
+                    <h4>安装命令</h4>
+                    <button id="copy-btn" class="ghost-btn">Copy</button>
+                </div>
+                <textarea id="install-command" readonly rows="7"></textarea>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/admin.js"></script>
+</body>
+</html>

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import os
 from pathlib import Path
+import secrets
+import shlex
 import sys
 from typing import Any
 
+import yaml
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -15,13 +19,14 @@ from pydantic import BaseModel, Field
 if __package__ in {None, ""}:
     sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from server.config import load_config
+from server.config import DEFAULT_CONFIG_PATH, load_config
 from server.models import MetricStore, parse_ts
 from server.notifier import Notifier
 
 
 BASE_DIR = Path(__file__).resolve().parent
-CONFIG = load_config()
+CONFIG_PATH = Path(os.environ.get("PROBE_CONFIG", DEFAULT_CONFIG_PATH))
+CONFIG = load_config(CONFIG_PATH)
 STORE = MetricStore(CONFIG.database.path)
 NOTIFIER = Notifier(CONFIG.notifier.smtp)
 
@@ -53,14 +58,28 @@ class ReportPayload(BaseModel):
     services: list[ServiceStatus] = Field(default_factory=list)
 
 
+class RegisterAgentPayload(BaseModel):
+    hostname: str = Field(min_length=1, max_length=128)
+    server_url: str = "https://status.777702.xyz"
+    interval_seconds: int = Field(default=60, ge=5, le=86400)
+    services: str = "ssh:22"
+    public_ip: str = ""
+    location: str = ""
+    token: str | None = None
+
+
 @app.on_event("startup")
 def startup() -> None:
     STORE.init()
     STORE.cleanup(CONFIG.database.retention_days)
 
 
+def current_config():
+    return load_config(CONFIG_PATH)
+
+
 def require_agent(payload: ReportPayload, authorization: str | None) -> None:
-    expected = CONFIG.token_for(payload.hostname)
+    expected = current_config().token_for(payload.hostname)
     if expected is None:
         raise HTTPException(status_code=403, detail="unknown agent hostname")
     prefix = "Bearer "
@@ -80,9 +99,10 @@ def should_send(state: dict[str, Any] | None, cooldown: timedelta) -> bool:
 
 def check_alerts(saved: dict[str, Any]) -> None:
     hostname = str(saved["hostname"])
-    cooldown = timedelta(minutes=CONFIG.alert.cooldown_minutes)
+    config = current_config()
+    cooldown = timedelta(minutes=config.alert.cooldown_minutes)
 
-    for metric, threshold in CONFIG.alert.thresholds.items():
+    for metric, threshold in config.alert.thresholds.items():
         value = float(saved.get(metric, 0))
         active_now = value >= threshold
         state = STORE.get_alert_state(hostname, metric)
@@ -111,12 +131,18 @@ def dashboard(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
+@app.get("/admin", response_class=HTMLResponse)
+def admin(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("admin.html", {"request": request})
+
+
 @app.get("/api/nodes")
 def nodes() -> dict[str, Any]:
+    config = current_config()
     return {
-        "nodes": STORE.list_nodes(CONFIG.alert.thresholds, CONFIG.server.stale_after_seconds),
-        "thresholds": CONFIG.alert.thresholds,
-        "stale_after_seconds": CONFIG.server.stale_after_seconds,
+        "nodes": STORE.list_nodes(config.alert.thresholds, config.server.stale_after_seconds),
+        "thresholds": config.alert.thresholds,
+        "stale_after_seconds": config.server.stale_after_seconds,
     }
 
 
@@ -125,6 +151,56 @@ def node_history(hostname: str, hours: int = 1) -> dict[str, Any]:
     if hours not in {1, 6, 24}:
         raise HTTPException(status_code=400, detail="hours must be one of 1, 6, 24")
     return {"hostname": hostname, "hours": hours, "points": STORE.history(hostname, hours)}
+
+
+def require_admin(x_admin_token: str | None) -> None:
+    token = current_config().server.admin_token
+    if not token or token == "change-me-admin-token":
+        raise HTTPException(status_code=503, detail="admin token is not configured")
+    if x_admin_token != token:
+        raise HTTPException(status_code=401, detail="invalid admin token")
+
+
+def write_agent_credential(hostname: str, token: str) -> None:
+    raw = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
+    server = raw.setdefault("server", {})
+    agents = server.setdefault("agents", [])
+    agents[:] = [agent for agent in agents if agent.get("hostname") != hostname]
+    agents.append({"hostname": hostname, "token": token})
+    CONFIG_PATH.write_text(yaml.safe_dump(raw, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
+def build_install_command(payload: RegisterAgentPayload, token: str) -> str:
+    parts = [
+        "curl -fsSL https://raw.githubusercontent.com/0130-vow/status/main/deploy/install-agent.sh",
+        "| sudo bash -s --",
+        f"--server {shlex.quote(payload.server_url.rstrip('/'))}",
+        f"--hostname {shlex.quote(payload.hostname)}",
+        f"--token {shlex.quote(token)}",
+        f"--interval {payload.interval_seconds}",
+        f"--services {shlex.quote(payload.services)}",
+    ]
+    if payload.public_ip:
+        parts.append(f"--public-ip {shlex.quote(payload.public_ip)}")
+    if payload.location:
+        parts.append(f"--location {shlex.quote(payload.location)}")
+    return " \\\n  ".join(parts)
+
+
+@app.post("/api/admin/agents")
+def register_agent(
+    payload: RegisterAgentPayload,
+    x_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    require_admin(x_admin_token)
+    token = payload.token or secrets.token_hex(32)
+    write_agent_credential(payload.hostname, token)
+    return {
+        "ok": True,
+        "hostname": payload.hostname,
+        "token": token,
+        "install_command": build_install_command(payload, token),
+    }
 
 
 @app.post("/api/report")

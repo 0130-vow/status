@@ -85,6 +85,14 @@ curl -fsSL https://raw.githubusercontent.com/0130-vow/status/main/deploy/install
   --services "ssh:22,nginx:80"
 ```
 
+也可以在管理界面生成安装命令：
+
+```text
+https://status.777702.xyz/admin
+```
+
+输入服务端 `config.yaml` 中的 `server.admin_token`，填写节点名称和探活项，即可登记节点并生成一键安装命令。
+
 手动部署方式：
 
 ```bash

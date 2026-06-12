@@ -52,6 +52,22 @@ header p {
     font-size: 13px;
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.header-actions a {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.header-actions a:hover {
+    color: var(--text-main);
+}
+
 .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -396,6 +412,98 @@ header p {
     color: var(--status-down);
 }
 
+.admin-container {
+    max-width: 760px;
+}
+
+.admin-panel {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 24px;
+}
+
+.admin-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.admin-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.admin-grid input,
+.command-box textarea {
+    width: 100%;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: #ffffff;
+    color: var(--text-main);
+    font: 13px var(--font-family);
+    padding: 10px 12px;
+}
+
+.admin-grid input:focus,
+.command-box textarea:focus {
+    border-color: #9ca3af;
+    outline: none;
+}
+
+.admin-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.primary-btn,
+.ghost-btn {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    font: 13px var(--font-family);
+    padding: 8px 12px;
+}
+
+.primary-btn {
+    background: var(--text-main);
+    color: #ffffff;
+    border-color: var(--text-main);
+}
+
+.ghost-btn {
+    background: #ffffff;
+    color: var(--text-main);
+}
+
+#admin-status {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+#admin-status.admin-error {
+    color: var(--status-down);
+}
+
+#admin-status.admin-ok {
+    color: var(--status-up);
+}
+
+.command-box {
+    margin-top: 24px;
+}
+
+.command-box textarea {
+    min-height: 150px;
+    resize: vertical;
+    font-family: Consolas, "SFMono-Regular", monospace;
+}
+
 @media (max-width: 640px) {
     body {
         padding: 24px 12px;
@@ -405,6 +513,12 @@ header p {
         align-items: flex-start;
         flex-direction: column;
         gap: 8px;
+    }
+
+    .header-actions {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
     }
 
     .grid {
@@ -417,6 +531,10 @@ header p {
     }
 
     .info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-grid {
         grid-template-columns: 1fr;
     }
 
