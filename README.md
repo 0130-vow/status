@@ -71,6 +71,22 @@ python -m server.main
 
 ### 2. Agent 部署（每台被监控机器）
 
+推荐使用一键脚本：
+
+```bash
+# 先在主控机登记节点，并生成 token
+ssh straw@140.245.57.96 "bash /home/straw/probe/current/deploy/add-agent.sh --hostname node-02"
+
+# 再在被监控机器执行上一步输出的安装命令
+curl -fsSL https://raw.githubusercontent.com/0130-vow/status/main/deploy/install-agent.sh | sudo bash -s -- \
+  --server https://status.777702.xyz \
+  --hostname node-02 \
+  --token <上一步生成的 token> \
+  --services "ssh:22,nginx:80"
+```
+
+手动部署方式：
+
 ```bash
 # 安装依赖
 cd probe
