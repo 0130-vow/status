@@ -85,5 +85,5 @@ hostname: $HOSTNAME
 token: $TOKEN
 
 Install command:
-curl -fsSL https://raw.githubusercontent.com/0130-vow/status/main/deploy/install-agent.sh | sudo bash -s -- --server https://status.777702.xyz --hostname $HOSTNAME --token $TOKEN --services "ssh:22"
+curl -fsSL https://raw.githubusercontent.com/0130-vow/status/main/deploy/install-agent.sh | sudo bash -s -- --server https://status.777702.xyz --hostname $HOSTNAME --token $TOKEN --services "广东电信:202.96.128.86:53,广东移动:211.136.192.6:53,广东联通:210.21.196.6:53,中国香港:1.1.1.1:443,美国洛杉矶:8.8.8.8:443"
 EOF

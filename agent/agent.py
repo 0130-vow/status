@@ -41,19 +41,23 @@ def cpu_model() -> str:
         return platform.machine()
 
 
-def check_port(name: str, port: int, timeout: float = 1.0) -> dict[str, Any]:
+def check_tcp(name: str, host: str, port: int, timeout: float = 1.0) -> dict[str, Any]:
     started = time.perf_counter()
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+        with socket.create_connection((host, port), timeout=timeout):
             latency_ms = (time.perf_counter() - started) * 1000
             return {
                 "name": name,
                 "status": "running",
-                "target": f"127.0.0.1:{port}",
+                "target": f"{host}:{port}",
                 "latency_ms": round(latency_ms, 2),
             }
     except OSError:
-        return {"name": name, "status": "down", "target": f"127.0.0.1:{port}"}
+        return {"name": name, "status": "down", "target": f"{host}:{port}"}
+
+
+def check_port(name: str, port: int, timeout: float = 1.0) -> dict[str, Any]:
+    return check_tcp(name, "127.0.0.1", port, timeout=timeout)
 
 
 def check_process(name: str, process_name: str) -> dict[str, Any]:
@@ -79,6 +83,9 @@ def collect_services(raw: str) -> list[dict[str, Any]]:
         name, target = [part.strip() for part in item.split(":", 1)]
         if target.isdigit():
             services.append(check_port(name, int(target)))
+        elif ":" in target and target.rsplit(":", 1)[1].isdigit():
+            host, port = target.rsplit(":", 1)
+            services.append(check_tcp(name, host, int(port)))
         elif target.startswith("process="):
             services.append(check_process(name, target.split("=", 1)[1]))
         else:

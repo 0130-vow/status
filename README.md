@@ -82,7 +82,7 @@ curl -fsSL https://raw.githubusercontent.com/0130-vow/status/main/deploy/install
   --server https://status.777702.xyz \
   --hostname node-02 \
   --token <上一步生成的 token> \
-  --services "ssh:22,nginx:80"
+  --services "广东电信:202.96.128.86:53,广东移动:211.136.192.6:53,广东联通:210.21.196.6:53,中国香港:1.1.1.1:443,美国洛杉矶:8.8.8.8:443"
 ```
 
 安装脚本会自动处理 `python3`、`pip`、`psutil`、`requests` 等 Agent 依赖，并创建 `probe-agent.service`。
@@ -216,6 +216,14 @@ interval_seconds = 60
 services = nginx:80, mysql:3306, ssh:22
 public_ip =
 location =
+```
+
+`services` 支持三种格式：
+
+```text
+ssh:22                         # 探测本机 127.0.0.1:22
+广东电信:202.96.128.86:53      # 探测远程 TCP 目标并记录延迟
+docker:process=dockerd         # 探测进程是否存在
 ```
 
 ## 数据存储

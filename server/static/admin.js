@@ -12,8 +12,10 @@ const locationInput = document.getElementById("location");
 const statusEl = document.getElementById("admin-status");
 const commandBox = document.getElementById("command-box");
 const commandText = document.getElementById("install-command");
+const defaultServices = "广东电信:202.96.128.86:53,广东移动:211.136.192.6:53,广东联通:210.21.196.6:53,中国香港:1.1.1.1:443,美国洛杉矶:8.8.8.8:443";
 
 serverUrlInput.value = window.location.origin;
+servicesInput.value = servicesInput.value || defaultServices;
 
 function setStatus(element, message, isError = false) {
     element.textContent = message;
