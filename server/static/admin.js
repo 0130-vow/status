@@ -15,6 +15,8 @@ const agentEmpty = document.getElementById("agent-empty");
 const commandBox = document.getElementById("command-box");
 const commandTitle = document.getElementById("command-title");
 const commandText = document.getElementById("install-command");
+const sessionUserEl = document.getElementById("session-user");
+const logoutBtn = document.getElementById("logout-btn");
 const defaultServices = "广东电信:202.96.128.86:53,广东移动:211.136.192.6:53,广东联通:210.21.196.6:53,中国香港:1.1.1.1:443,美国洛杉矶:8.8.8.8:443";
 
 serverUrlInput.value = window.location.origin;
@@ -42,13 +44,18 @@ function showCommand(title, command) {
 function setLoggedIn(username) {
     loginPanel.hidden = true;
     agentPanel.hidden = false;
-    document.getElementById("session-user").textContent = `已登录：${username}`;
+    sessionUserEl.textContent = `已登录：${username}`;
+    sessionUserEl.hidden = false;
+    logoutBtn.hidden = false;
     loadAgents().catch((error) => setStatus(statusEl, error.message, true));
 }
 
 function setLoggedOut() {
     loginPanel.hidden = false;
     agentPanel.hidden = true;
+    sessionUserEl.textContent = "";
+    sessionUserEl.hidden = true;
+    logoutBtn.hidden = true;
     passwordInput.value = "";
     commandBox.hidden = true;
 }
@@ -198,7 +205,7 @@ document.getElementById("login-btn").addEventListener("click", async () => {
     }
 });
 
-document.getElementById("logout-btn").addEventListener("click", async () => {
+logoutBtn.addEventListener("click", async () => {
     await fetch("/api/admin/logout", { method: "POST" });
     setLoggedOut();
 });

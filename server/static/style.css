@@ -84,6 +84,20 @@ header p {
     color: var(--text-main);
 }
 
+.header-session {
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.header-actions .header-logout {
+    background: #ffffff;
+    color: var(--text-main);
+    line-height: 1;
+    padding: 6px 10px;
+}
+
 .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -504,17 +518,6 @@ header p {
     align-items: center;
     gap: 12px;
     margin-top: 18px;
-}
-
-.admin-session {
-    align-items: center;
-    border-bottom: 1px solid var(--border-color);
-    color: var(--text-muted);
-    display: flex;
-    font-size: 13px;
-    justify-content: space-between;
-    margin-bottom: 18px;
-    padding-bottom: 14px;
 }
 
 .primary-btn,

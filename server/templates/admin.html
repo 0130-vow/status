@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Probe Admin</title>
-    <link rel="stylesheet" href="/static/style.css?v=agent-manager-1">
+    <link rel="stylesheet" href="/static/style.css?v=admin-layout-1">
 </head>
 <body>
     <div class="container admin-container">
@@ -14,7 +14,9 @@
                 <p>Agent management</p>
             </div>
             <nav class="header-actions">
+                <span class="header-session" id="session-user" hidden></span>
                 <a class="admin-link" href="/">Overview</a>
+                <button id="logout-btn" class="ghost-btn header-logout" hidden>退出</button>
             </nav>
         </header>
 
@@ -36,11 +38,6 @@
         </section>
 
         <section id="agent-panel" hidden>
-            <div class="admin-session">
-                <span id="session-user"></span>
-                <button id="logout-btn" class="ghost-btn">退出</button>
-            </div>
-
             <section class="admin-panel">
                 <div class="detail-section-header">
                     <h4>新增 Agent</h4>
@@ -97,6 +94,6 @@
         </section>
     </div>
 
-    <script src="/static/admin.js?v=agent-manager-1"></script>
+    <script src="/static/admin.js?v=admin-layout-1"></script>
 </body>
 </html>
