@@ -190,6 +190,11 @@ def dashboard(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
+@app.get("/nodes/{hostname}", response_class=HTMLResponse)
+def node_detail(request: Request, hostname: str) -> HTMLResponse:
+    return templates.TemplateResponse("node_detail.html", {"request": request, "hostname": hostname})
+
+
 @app.get("/admin", response_class=HTMLResponse)
 def admin(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("admin.html", {"request": request})

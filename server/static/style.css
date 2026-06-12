@@ -94,14 +94,26 @@ header p {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: 8px;
+    color: inherit;
+    display: block;
     padding: 24px;
     cursor: pointer;
+    text-decoration: none;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:visited {
+    color: inherit;
 }
 
 .card:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.04);
+}
+
+.card:focus-visible {
+    outline: 2px solid #9ca3af;
+    outline-offset: 3px;
 }
 
 .card-header {
@@ -229,6 +241,22 @@ header p {
     border-radius: 8px;
     padding: 32px;
     text-align: center;
+}
+
+.empty:not([hidden]) {
+    display: block;
+}
+
+.detail-container {
+    max-width: 860px;
+}
+
+.detail-title {
+    margin-bottom: 22px;
+}
+
+.detail-chart {
+    height: 260px;
 }
 
 .modal-overlay {

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Probe - 节点详情</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/style.css?v=detail-page-1">
+</head>
+<body data-hostname="{{ hostname }}">
+    <div class="container detail-container">
+        <header>
+            <div>
+                <h1>Node Detail</h1>
+                <p id="clock">Syncing...</p>
+            </div>
+            <nav class="header-actions">
+                <a class="admin-link" href="/">Overview</a>
+                <a class="admin-link" href="/admin">Admin</a>
+            </nav>
+        </header>
+
+        <div class="empty" id="missing-state" hidden>未找到该节点数据</div>
+
+        <main id="detail-content">
+            <div class="modal-title detail-title" id="m-title"></div>
+
+            <div class="detail-section">
+                <div class="detail-section-header"><h4>基础信息</h4></div>
+                <div class="info-grid">
+                    <div class="info-item"><span>系统环境</span><div id="m-os">--</div></div>
+                    <div class="info-item"><span>节点 IP</span><div id="m-ip">--</div></div>
+                    <div class="info-item"><span>CPU 架构</span><div id="m-cpu">--</div></div>
+                    <div class="info-item"><span>物理位置</span><div id="m-loc">--</div></div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-header">
+                    <h4>网络延迟监控</h4>
+                    <div class="time-toggles">
+                        <button class="time-btn active" data-hours="1">1 小时</button>
+                        <button class="time-btn" data-hours="6">6 小时</button>
+                        <button class="time-btn" data-hours="24">24 小时</button>
+                    </div>
+                </div>
+                <div class="network-module">
+                    <div class="chart-container detail-chart">
+                        <canvas id="metricChart"></canvas>
+                    </div>
+                    <div class="ping-list" id="m-services"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/detail.js?v=detail-page-1"></script>
+</body>
+</html>
