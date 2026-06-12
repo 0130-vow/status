@@ -36,6 +36,7 @@ STORE = MetricStore(CONFIG.database.path)
 NOTIFIER = Notifier(CONFIG.notifier.smtp)
 SESSION_COOKIE = "probe_admin_session"
 SESSION_TTL_SECONDS = 12 * 60 * 60
+DEFAULT_AGENT_SERVICES = "广东电信:202.96.128.86:53,广东移动:211.136.192.6:53,广东联通:210.21.196.6:53,中国香港:1.1.1.1:443,美国洛杉矶:8.8.8.8:443"
 
 app = FastAPI(title="Probe", version="0.1.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -69,7 +70,7 @@ class RegisterAgentPayload(BaseModel):
     hostname: str = Field(min_length=1, max_length=128)
     server_url: str = "https://status.777702.xyz"
     interval_seconds: int = Field(default=60, ge=5, le=86400)
-    services: str = "ssh:22"
+    services: str = DEFAULT_AGENT_SERVICES
     public_ip: str = ""
     location: str = ""
     token: str | None = None
@@ -77,7 +78,7 @@ class RegisterAgentPayload(BaseModel):
 
 class UpdateAgentPayload(BaseModel):
     name: str = Field(default="", max_length=128)
-    services: str = ""
+    services: str = DEFAULT_AGENT_SERVICES
     interval_seconds: int = Field(default=60, ge=5, le=86400)
     public_ip: str = ""
     location: str = ""
@@ -327,6 +328,7 @@ def remove_agent_config(hostname: str) -> bool:
 
 
 def build_install_command(payload: RegisterAgentPayload, token: str) -> str:
+    services = payload.services.strip() or DEFAULT_AGENT_SERVICES
     parts = [
         "curl -fsSL https://raw.githubusercontent.com/0130-vow/status/main/deploy/install-agent.sh",
         "| sudo bash -s --",
@@ -335,8 +337,8 @@ def build_install_command(payload: RegisterAgentPayload, token: str) -> str:
         f"--token {shlex.quote(token)}",
         f"--interval {payload.interval_seconds}",
     ]
-    if payload.services.strip():
-        parts.append(f"--services {shlex.quote(payload.services)}")
+    if services:
+        parts.append(f"--services {shlex.quote(services)}")
     if payload.public_ip:
         parts.append(f"--public-ip {shlex.quote(payload.public_ip)}")
     if payload.location:
@@ -361,7 +363,7 @@ def agent_payload_from_config(agent: Any, request: Request) -> RegisterAgentPayl
         hostname=agent.hostname,
         server_url=request_server_url(request),
         interval_seconds=agent.interval_seconds or 60,
-        services=agent.services or "",
+        services=agent.services or DEFAULT_AGENT_SERVICES,
         public_ip=agent.public_ip,
         location=agent.location,
         token=agent.token,
