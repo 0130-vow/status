@@ -244,14 +244,20 @@ class MetricStore:
             rows = conn.execute(
                 """
                 SELECT timestamp, cpu_percent, memory_percent, disk_percent,
-                       net_up_bps, net_down_bps
+                       net_up_bps, net_down_bps, services_json
                 FROM metrics
                 WHERE hostname = ? AND timestamp >= ?
                 ORDER BY timestamp ASC
                 """,
                 (hostname, iso(cutoff)),
             ).fetchall()
-        return [dict(row) for row in rows]
+
+        points: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["services"] = json.loads(item.pop("services_json") or "[]")
+            points.append(item)
+        return points
 
     def get_alert_state(self, hostname: str, metric: str) -> dict[str, Any] | None:
         with self._lock, self.connect() as conn:

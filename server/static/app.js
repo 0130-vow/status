@@ -5,6 +5,8 @@ const state = {
     refreshTimer: null,
 };
 
+const CHART_COLORS = ["#14b8a6", "#818cf8", "#22c55e", "#7dd3fc", "#a78bfa", "#f59e0b"];
+
 const statusClass = (status) => {
     if (status === "warn") return "warn";
     if (status === "offline") return "offline";
@@ -167,26 +169,45 @@ async function renderHistory(hostname, hours) {
     const data = await response.json();
     const points = data.points || [];
     const labels = points.map((point) => new Date(point.timestamp).toLocaleTimeString("en-US", { hour12: false }));
-
-    const datasets = [
-        { label: "CPU", data: points.map((p) => p.cpu_percent), borderColor: "#10b981" },
-        { label: "内存", data: points.map((p) => p.memory_percent), borderColor: "#3b82f6" },
-        { label: "磁盘", data: points.map((p) => p.disk_percent), borderColor: "#f59e0b" },
-    ].map((item) => ({
-        ...item,
-        backgroundColor: "transparent",
-        borderWidth: 2,
-        tension: 0.35,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-    }));
+    const serviceNames = Array.from(new Set(points.flatMap((point) => (point.services || []).map((service) => service.name))));
+    const datasets = serviceNames.map((name, index) => {
+        const color = CHART_COLORS[index % CHART_COLORS.length];
+        return {
+            label: name,
+            data: points.map((point) => {
+                const service = (point.services || []).find((item) => item.name === name);
+                return typeof service?.latency_ms === "number" ? service.latency_ms : null;
+            }),
+            borderColor: color,
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            tension: 0.35,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            spanGaps: true,
+        };
+    });
 
     const ctx = document.getElementById("metricChart").getContext("2d");
     if (state.chart) state.chart.destroy();
+    const noDataPlugin = {
+        id: "noLatencyData",
+        afterDraw: (chart) => {
+            if (datasets.length) return;
+            const { ctx: chartCtx, chartArea } = chart;
+            chartCtx.save();
+            chartCtx.fillStyle = "#9ca3af";
+            chartCtx.font = "13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+            chartCtx.textAlign = "center";
+            chartCtx.fillText("暂无延迟历史数据", (chartArea.left + chartArea.right) / 2, (chartArea.top + chartArea.bottom) / 2);
+            chartCtx.restore();
+        },
+    };
     state.chart = new Chart(ctx, {
         type: "line",
         data: { labels, datasets },
         options: {
+            animation: false,
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
@@ -196,20 +217,34 @@ async function renderHistory(hostname, hours) {
                     align: "end",
                     labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { size: 10 } },
                 },
-                tooltip: { mode: "index", intersect: false },
+                tooltip: {
+                    mode: "index",
+                    intersect: false,
+                    callbacks: {
+                        label: (context) => {
+                            const value = context.parsed.y;
+                            return `${context.dataset.label}: ${value == null ? "--" : value.toFixed(1)} ms`;
+                        },
+                    },
+                },
             },
             scales: {
                 x: { display: false },
                 y: {
                     min: 0,
-                    max: 100,
                     border: { display: false },
                     grid: { color: "#f3f4f6" },
-                    ticks: { font: { size: 10 }, color: "#9ca3af", maxTicksLimit: 5 },
+                    ticks: {
+                        font: { size: 10 },
+                        color: "#9ca3af",
+                        maxTicksLimit: 5,
+                        callback: (value) => `${value} ms`,
+                    },
                 },
             },
             interaction: { mode: "nearest", axis: "x", intersect: false },
         },
+        plugins: [noDataPlugin],
     });
 }
 
