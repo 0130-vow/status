@@ -282,6 +282,13 @@ class MetricStore:
                 (hostname, metric, 1 if active else 0, last_sent, value),
             )
 
+    def delete_node(self, hostname: str) -> dict[str, int]:
+        with self._lock, self.connect() as conn:
+            metrics = conn.execute("DELETE FROM metrics WHERE hostname = ?", (hostname,)).rowcount or 0
+            alerts = conn.execute("DELETE FROM alert_states WHERE hostname = ?", (hostname,)).rowcount or 0
+            nodes = conn.execute("DELETE FROM nodes WHERE hostname = ?", (hostname,)).rowcount or 0
+        return {"nodes": int(nodes), "metrics": int(metrics), "alert_states": int(alerts)}
+
     def cleanup(self, retention_days: int) -> int:
         cutoff = utc_now() - timedelta(days=retention_days)
         with self._lock, self.connect() as conn:

@@ -75,6 +75,13 @@ class RegisterAgentPayload(BaseModel):
     token: str | None = None
 
 
+class UpdateAgentPayload(BaseModel):
+    services: str = ""
+    interval_seconds: int = Field(default=60, ge=5, le=86400)
+    public_ip: str = ""
+    location: str = ""
+
+
 class LoginPayload(BaseModel):
     username: str = Field(min_length=1, max_length=128)
     password: str = Field(min_length=1, max_length=256)
@@ -138,7 +145,11 @@ def require_admin(request: Request) -> str:
 
 
 def require_agent(payload: ReportPayload, authorization: str | None) -> None:
-    expected = current_config().token_for(payload.hostname)
+    require_agent_hostname(payload.hostname, authorization)
+
+
+def require_agent_hostname(hostname: str, authorization: str | None) -> None:
+    expected = current_config().token_for(hostname)
     if expected is None:
         raise HTTPException(status_code=403, detail="unknown agent hostname")
     prefix = "Bearer "
@@ -253,13 +264,56 @@ def admin_logout(response: Response) -> dict[str, Any]:
     return {"ok": True}
 
 
-def write_agent_credential(hostname: str, token: str) -> None:
+def read_config_raw() -> dict[str, Any]:
     raw = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=500, detail="config root must be a mapping")
+    return raw
+
+
+def write_config_raw(raw: dict[str, Any]) -> None:
+    CONFIG_PATH.write_text(yaml.safe_dump(raw, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
+def write_agent_credential(payload: RegisterAgentPayload, token: str) -> None:
+    raw = read_config_raw()
     server = raw.setdefault("server", {})
     agents = server.setdefault("agents", [])
+    agents[:] = [agent for agent in agents if agent.get("hostname") != payload.hostname]
+    agents.append(
+        {
+            "hostname": payload.hostname,
+            "token": token,
+            "services": payload.services,
+            "interval_seconds": payload.interval_seconds,
+            "public_ip": payload.public_ip,
+            "location": payload.location,
+        }
+    )
+    write_config_raw(raw)
+
+
+def update_agent_config(hostname: str, payload: UpdateAgentPayload) -> dict[str, Any]:
+    raw = read_config_raw()
+    agents = raw.setdefault("server", {}).setdefault("agents", [])
+    for agent in agents:
+        if agent.get("hostname") == hostname:
+            agent["services"] = payload.services
+            agent["interval_seconds"] = payload.interval_seconds
+            agent["public_ip"] = payload.public_ip
+            agent["location"] = payload.location
+            write_config_raw(raw)
+            return dict(agent)
+    raise HTTPException(status_code=404, detail="agent not found")
+
+
+def remove_agent_config(hostname: str) -> bool:
+    raw = read_config_raw()
+    agents = raw.setdefault("server", {}).setdefault("agents", [])
+    before = len(agents)
     agents[:] = [agent for agent in agents if agent.get("hostname") != hostname]
-    agents.append({"hostname": hostname, "token": token})
-    CONFIG_PATH.write_text(yaml.safe_dump(raw, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    write_config_raw(raw)
+    return len(agents) != before
 
 
 def build_install_command(payload: RegisterAgentPayload, token: str) -> str:
@@ -279,6 +333,74 @@ def build_install_command(payload: RegisterAgentPayload, token: str) -> str:
     return " \\\n  ".join(parts)
 
 
+def build_uninstall_command() -> str:
+    return "curl -fsSL https://raw.githubusercontent.com/0130-vow/status/main/deploy/uninstall-agent.sh | sudo bash"
+
+
+def request_server_url(request: Request) -> str:
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    scheme = forwarded_proto or request.url.scheme
+    forwarded_host = request.headers.get("x-forwarded-host")
+    host = forwarded_host or request.headers.get("host") or request.url.netloc
+    return f"{scheme}://{host}".rstrip("/")
+
+
+def agent_payload_from_config(agent: Any, request: Request) -> RegisterAgentPayload:
+    return RegisterAgentPayload(
+        hostname=agent.hostname,
+        server_url=request_server_url(request),
+        interval_seconds=agent.interval_seconds or 60,
+        services=agent.services or "",
+        public_ip=agent.public_ip,
+        location=agent.location,
+        token=agent.token,
+    )
+
+
+@app.get("/api/agent/config/{hostname}")
+def agent_remote_config(hostname: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    require_agent_hostname(hostname, authorization)
+    config = current_config()
+    for agent in config.server.agents:
+        if agent.hostname == hostname:
+            return {
+                "hostname": agent.hostname,
+                "services": agent.services,
+                "interval_seconds": agent.interval_seconds,
+                "public_ip": agent.public_ip,
+                "location": agent.location,
+            }
+    raise HTTPException(status_code=404, detail="agent not found")
+
+
+@app.get("/api/admin/agents")
+def admin_agents(request: Request) -> dict[str, Any]:
+    require_admin(request)
+    config = current_config()
+    nodes_by_hostname = {
+        node["hostname"]: node
+        for node in STORE.list_nodes(config.alert.thresholds, config.server.stale_after_seconds)
+    }
+    agents = []
+    for agent in config.server.agents:
+        payload = agent_payload_from_config(agent, request)
+        agents.append(
+            {
+                "hostname": agent.hostname,
+                "services": agent.services,
+                "interval_seconds": agent.interval_seconds or 60,
+                "public_ip": agent.public_ip,
+                "location": agent.location,
+                "node": nodes_by_hostname.get(agent.hostname),
+                "install_command": build_install_command(payload, agent.token),
+                "uninstall_command": build_uninstall_command(),
+            }
+        )
+    configured = {agent.hostname for agent in config.server.agents}
+    unmanaged_nodes = [node for hostname, node in nodes_by_hostname.items() if hostname not in configured]
+    return {"agents": agents, "unmanaged_nodes": unmanaged_nodes, "uninstall_command": build_uninstall_command()}
+
+
 @app.post("/api/admin/agents")
 def register_agent(
     payload: RegisterAgentPayload,
@@ -286,12 +408,50 @@ def register_agent(
 ) -> dict[str, Any]:
     require_admin(request)
     token = payload.token or secrets.token_hex(32)
-    write_agent_credential(payload.hostname, token)
+    write_agent_credential(payload, token)
     return {
         "ok": True,
         "hostname": payload.hostname,
         "token": token,
         "install_command": build_install_command(payload, token),
+    }
+
+
+@app.put("/api/admin/agents/{hostname}")
+def save_agent(
+    hostname: str,
+    payload: UpdateAgentPayload,
+    request: Request,
+) -> dict[str, Any]:
+    require_admin(request)
+    updated = update_agent_config(hostname, payload)
+    token = str(updated["token"])
+    install_payload = RegisterAgentPayload(
+        hostname=hostname,
+        server_url=request_server_url(request),
+        interval_seconds=payload.interval_seconds,
+        services=payload.services,
+        public_ip=payload.public_ip,
+        location=payload.location,
+    )
+    return {
+        "ok": True,
+        "hostname": hostname,
+        "install_command": build_install_command(install_payload, token),
+    }
+
+
+@app.delete("/api/admin/agents/{hostname}")
+def delete_agent(hostname: str, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    removed_config = remove_agent_config(hostname)
+    removed_data = STORE.delete_node(hostname)
+    return {
+        "ok": True,
+        "hostname": hostname,
+        "removed_config": removed_config,
+        "removed_data": removed_data,
+        "uninstall_command": build_uninstall_command(),
     }
 
 

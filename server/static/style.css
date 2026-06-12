@@ -560,6 +560,54 @@ header p {
     font-family: Consolas, "SFMono-Regular", monospace;
 }
 
+.agent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.agent-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.agent-card-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.agent-name {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.agent-meta {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.agent-edit-grid {
+    grid-template-columns: 2fr 1fr;
+}
+
+.agent-row-actions {
+    margin-top: 14px;
+}
+
+.agent-row-status {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.danger-btn {
+    color: var(--status-down);
+}
+
 @media (max-width: 640px) {
     body {
         padding: 24px 12px;
@@ -592,6 +640,14 @@ header p {
     }
 
     .admin-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .agent-card-header {
+        flex-direction: column;
+    }
+
+    .agent-edit-grid {
         grid-template-columns: 1fr;
     }
 

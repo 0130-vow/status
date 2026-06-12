@@ -115,6 +115,36 @@ def collect_payload(config: configparser.ConfigParser) -> dict[str, Any]:
     }
 
 
+def apply_remote_config(config: configparser.ConfigParser) -> None:
+    server = config["server"]
+    collect = config["collect"]
+    host = server["host"].rstrip("/")
+    token = server["token"]
+    hostname = collect.get("hostname", socket.gethostname())
+
+    try:
+        response = requests.get(
+            f"{host}/api/agent/config/{hostname}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=5,
+        )
+        if response.status_code == 404:
+            return
+        response.raise_for_status()
+        remote = response.json()
+    except requests.RequestException:
+        return
+
+    for key in ("services", "public_ip", "location"):
+        value = remote.get(key)
+        if value is not None:
+            collect[key] = str(value)
+
+    interval = remote.get("interval_seconds")
+    if interval:
+        collect["interval_seconds"] = str(interval)
+
+
 def report_once(config: configparser.ConfigParser) -> dict[str, Any]:
     server = config["server"]
     host = server["host"].rstrip("/")
@@ -137,13 +167,14 @@ def main() -> None:
     args = parser.parse_args()
 
     config = read_config(Path(args.config))
-    interval = int(config["collect"].get("interval_seconds", "60"))
 
     while True:
+        apply_remote_config(config)
         result = report_once(config)
         print(json.dumps(result, ensure_ascii=False))
         if args.once:
             break
+        interval = int(config["collect"].get("interval_seconds", "60"))
         time.sleep(interval)
 
 

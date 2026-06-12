@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Probe Admin</title>
-    <link rel="stylesheet" href="/static/style.css?v=nav-polish-1">
+    <link rel="stylesheet" href="/static/style.css?v=agent-manager-1">
 </head>
 <body>
     <div class="container admin-container">
         <header>
             <div>
                 <h1>Admin</h1>
-                <p>Agent registration</p>
+                <p>Agent management</p>
             </div>
             <nav class="header-actions">
                 <a class="admin-link" href="/">Overview</a>
@@ -35,47 +35,61 @@
             </div>
         </section>
 
-        <section class="admin-panel" id="agent-panel" hidden>
+        <section id="agent-panel" hidden>
             <div class="admin-session">
                 <span id="session-user"></span>
                 <button id="logout-btn" class="ghost-btn">退出</button>
             </div>
 
-            <div class="admin-grid">
-                <label>
-                    <span>节点名称</span>
-                    <input id="hostname" type="text" placeholder="node-02">
-                </label>
-                <label>
-                    <span>主控地址</span>
-                    <input id="server-url" type="url">
-                </label>
-                <label>
-                    <span>上报间隔</span>
-                    <input id="interval" type="number" min="5" value="60">
-                </label>
-                <label>
-                    <span>服务探活</span>
-                    <input id="services" type="text" value="广东电信:202.96.128.86:53,广东移动:211.136.192.6:53,广东联通:210.21.196.6:53,中国香港:1.1.1.1:443,美国洛杉矶:8.8.8.8:443">
-                </label>
-                <label>
-                    <span>公网 IP</span>
-                    <input id="public-ip" type="text" placeholder="可留空">
-                </label>
-                <label>
-                    <span>位置</span>
-                    <input id="location" type="text" placeholder="Tokyo">
-                </label>
-            </div>
+            <section class="admin-panel">
+                <div class="detail-section-header">
+                    <h4>新增 Agent</h4>
+                </div>
+                <div class="admin-grid">
+                    <label>
+                        <span>节点名称</span>
+                        <input id="hostname" type="text" placeholder="node-02">
+                    </label>
+                    <label>
+                        <span>主控地址</span>
+                        <input id="server-url" type="url">
+                    </label>
+                    <label>
+                        <span>上报间隔</span>
+                        <input id="interval" type="number" min="5" value="60">
+                    </label>
+                    <label>
+                        <span>服务探活</span>
+                        <input id="services" type="text">
+                    </label>
+                    <label>
+                        <span>公网 IP</span>
+                        <input id="public-ip" type="text" placeholder="可留空">
+                    </label>
+                    <label>
+                        <span>位置</span>
+                        <input id="location" type="text" placeholder="Tokyo">
+                    </label>
+                </div>
 
-            <div class="admin-actions">
-                <button id="register-btn" class="primary-btn">生成安装命令</button>
-                <span id="admin-status"></span>
-            </div>
+                <div class="admin-actions">
+                    <button id="register-btn" class="primary-btn">生成安装命令</button>
+                    <span id="admin-status"></span>
+                </div>
+            </section>
+
+            <section class="admin-panel">
+                <div class="detail-section-header">
+                    <h4>已添加节点</h4>
+                    <button id="refresh-agents-btn" class="ghost-btn">刷新</button>
+                </div>
+                <div class="agent-list" id="agent-list"></div>
+                <div class="empty" id="agent-empty" hidden>暂无已添加节点</div>
+            </section>
 
             <div class="command-box" id="command-box" hidden>
                 <div class="detail-section-header">
-                    <h4>安装命令</h4>
+                    <h4 id="command-title">命令</h4>
                     <button id="copy-btn" class="ghost-btn">Copy</button>
                 </div>
                 <textarea id="install-command" readonly rows="7"></textarea>
@@ -83,6 +97,6 @@
         </section>
     </div>
 
-    <script src="/static/admin.js?v=nav-polish-1"></script>
+    <script src="/static/admin.js?v=agent-manager-1"></script>
 </body>
 </html>

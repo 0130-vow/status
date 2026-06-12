@@ -16,6 +16,10 @@ DEFAULT_CONFIG_PATH = ROOT_DIR / "config.yaml"
 class AgentCredential:
     hostname: str
     token: str
+    services: str = ""
+    interval_seconds: int | None = None
+    public_ip: str = ""
+    location: str = ""
 
 
 @dataclass(frozen=True)
@@ -96,11 +100,16 @@ def load_config(path: str | Path | None = None) -> AppConfig:
 
     server_raw = raw.get("server", {})
     agents = tuple(
-        AgentCredential(hostname=str(item["hostname"]), token=str(item["token"]))
+        AgentCredential(
+            hostname=str(item["hostname"]),
+            token=str(item["token"]),
+            services=str(item.get("services", "")),
+            interval_seconds=int(item["interval_seconds"]) if item.get("interval_seconds") else None,
+            public_ip=str(item.get("public_ip", "")),
+            location=str(item.get("location", "")),
+        )
         for item in server_raw.get("agents", [])
     )
-    if not agents:
-        raise ValueError("server.agents must contain at least one agent credential")
 
     database_raw = raw.get("database", {})
     alert_raw = raw.get("alert", {})
