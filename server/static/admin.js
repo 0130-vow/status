@@ -18,6 +18,10 @@ const locationInput = document.getElementById("location");
 const statusEl = document.getElementById("admin-status");
 const batchStatusEl = document.getElementById("batch-status");
 const agentTableBody = document.getElementById("agent-table-body");
+const selectAllAgentsInput = document.getElementById("select-all-agents");
+const bulkSelectedCountEl = document.getElementById("bulk-selected-count");
+const bulkUpgradeBtn = document.getElementById("bulk-upgrade-btn");
+const bulkCleanupBtn = document.getElementById("bulk-cleanup-btn");
 const agentList = document.getElementById("agent-list");
 const agentEmpty = document.getElementById("agent-empty");
 const commandBox = document.getElementById("command-box");
@@ -30,6 +34,7 @@ const defaultServices = "广东电信:202.96.128.86:53,广东移动:211.136.192.
 const state = {
     agents: [],
     editingHostname: "",
+    selectedHostnames: new Set(),
 };
 
 serverUrlInput.value = window.location.origin;
@@ -54,6 +59,31 @@ function showCommand(title, command) {
     commandTitle.textContent = title;
     commandText.value = command;
     commandBox.hidden = false;
+}
+
+function selectedAgents() {
+    return state.agents.filter((agent) => state.selectedHostnames.has(agent.hostname));
+}
+
+function updateBulkControls() {
+    const count = state.selectedHostnames.size;
+    bulkSelectedCountEl.textContent = `已选择 ${count} 个节点`;
+    bulkUpgradeBtn.disabled = count === 0;
+    bulkCleanupBtn.disabled = count === 0;
+    selectAllAgentsInput.checked = state.agents.length > 0 && count === state.agents.length;
+    selectAllAgentsInput.indeterminate = count > 0 && count < state.agents.length;
+}
+
+function showBulkCommand(title, agents, commandForAgent) {
+    if (!agents.length) {
+        setStatus(statusEl, "请先选择节点", true);
+        return;
+    }
+    const command = agents
+        .map((agent) => `# ${agentDisplayName(agent)} (${agent.hostname})\n${commandForAgent(agent)}`)
+        .join("\n\n");
+    showCommand(title, command);
+    setStatus(statusEl, `已生成 ${agents.length} 个节点命令`);
 }
 
 function setLoggedIn(username) {
@@ -135,6 +165,10 @@ function agentLocation(agent) {
 function renderAgentRows() {
     agentTableBody.innerHTML = "";
     agentEmpty.hidden = state.agents.length > 0;
+    const knownHostnames = new Set(state.agents.map((agent) => agent.hostname));
+    state.selectedHostnames.forEach((hostname) => {
+        if (!knownHostnames.has(hostname)) state.selectedHostnames.delete(hostname);
+    });
 
     state.agents.forEach((agent) => {
         const node = agent.node || {};
@@ -142,6 +176,9 @@ function renderAgentRows() {
         const row = document.createElement("tr");
         row.dataset.hostname = agent.hostname;
         row.innerHTML = `
+            <td class="select-col">
+                <input class="agent-select-input agent-row-select" type="checkbox" aria-label="选择 ${escapeHtml(agentDisplayName(agent))}" ${state.selectedHostnames.has(agent.hostname) ? "checked" : ""}>
+            </td>
             <td>
                 <div class="node-name-cell">${escapeHtml(agentDisplayName(agent))}</div>
                 ${agent.name && agent.name !== agent.hostname ? `<div class="node-hostname-cell">${escapeHtml(agent.hostname)}</div>` : ""}
@@ -157,10 +194,19 @@ function renderAgentRows() {
                 </div>
             </td>
         `;
+        row.querySelector(".agent-row-select").addEventListener("change", (event) => {
+            if (event.target.checked) {
+                state.selectedHostnames.add(agent.hostname);
+            } else {
+                state.selectedHostnames.delete(agent.hostname);
+            }
+            updateBulkControls();
+        });
         row.querySelector(".agent-edit-btn").addEventListener("click", () => editAgent(agent.hostname));
         row.querySelector(".agent-delete-btn").addEventListener("click", () => deleteAgent(agent.hostname));
         agentTableBody.appendChild(row);
     });
+    updateBulkControls();
 }
 
 function renderEditForm() {
@@ -349,6 +395,22 @@ document.getElementById("close-batch-btn").addEventListener("click", () => {
 
 document.getElementById("refresh-agents-btn").addEventListener("click", () => {
     loadAgents().catch((error) => setStatus(statusEl, error.message, true));
+});
+
+selectAllAgentsInput.addEventListener("change", () => {
+    state.selectedHostnames.clear();
+    if (selectAllAgentsInput.checked) {
+        state.agents.forEach((agent) => state.selectedHostnames.add(agent.hostname));
+    }
+    renderAgentRows();
+});
+
+bulkUpgradeBtn.addEventListener("click", () => {
+    showBulkCommand("批量升级/重装命令", selectedAgents(), (agent) => agent.install_command);
+});
+
+bulkCleanupBtn.addEventListener("click", () => {
+    showBulkCommand("批量探针清理命令", selectedAgents(), (agent) => agent.uninstall_command);
 });
 
 document.getElementById("register-btn").addEventListener("click", async () => {

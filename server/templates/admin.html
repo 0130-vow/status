@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Probe Admin</title>
-    <link rel="stylesheet" href="/static/style.css?v=batch-agents-1">
+    <link rel="stylesheet" href="/static/style.css?v=bulk-agent-actions-1">
 </head>
 <body>
     <div class="container admin-container">
@@ -115,10 +115,16 @@
                         <button id="open-batch-btn" class="ghost-btn" type="button">批量新增</button>
                     </div>
                 </div>
+                <div class="agent-bulk-bar">
+                    <span id="bulk-selected-count">已选择 0 个节点</span>
+                    <button id="bulk-upgrade-btn" class="ghost-btn" type="button">批量升级命令</button>
+                    <button id="bulk-cleanup-btn" class="ghost-btn" type="button">批量清理命令</button>
+                </div>
                 <div class="node-table-wrap">
                     <table class="node-table">
                         <thead>
                             <tr>
+                                <th class="select-col"><input id="select-all-agents" class="agent-select-input" type="checkbox" aria-label="选择全部节点"></th>
                                 <th>节点名称</th>
                                 <th>公网 IP</th>
                                 <th>状态</th>
@@ -144,6 +150,6 @@
         </section>
     </div>
 
-    <script src="/static/admin.js?v=batch-agents-1"></script>
+    <script src="/static/admin.js?v=bulk-agent-actions-1"></script>
 </body>
 </html>

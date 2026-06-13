@@ -615,6 +615,29 @@ header p {
     gap: 10px;
 }
 
+.agent-bulk-bar {
+    align-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-muted);
+    display: flex;
+    font-size: 12px;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+}
+
+.agent-bulk-bar span {
+    margin-right: auto;
+}
+
+.primary-btn:disabled,
+.ghost-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
 .node-table-wrap {
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -632,6 +655,12 @@ header p {
     padding: 16px 20px;
     text-align: left;
     vertical-align: middle;
+}
+
+.node-table .select-col {
+    padding-left: 14px;
+    padding-right: 8px;
+    width: 42px;
 }
 
 .node-table th {
@@ -886,6 +915,15 @@ header p {
 
     .node-manager-actions button {
         flex: 1;
+    }
+
+    .agent-bulk-bar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .agent-bulk-bar span {
+        margin-right: 0;
     }
 
     .node-table-wrap {
