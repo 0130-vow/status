@@ -1,7 +1,11 @@
 const state = {
     nodes: [],
     refreshTimer: null,
+    nodesEtag: "",
 };
+
+const VISIBLE_REFRESH_MS = 15000;
+const HIDDEN_REFRESH_MS = 60000;
 
 const statusClass = (status) => {
     if (status === "warn") return "warn";
@@ -91,8 +95,14 @@ function renderCards() {
 }
 
 async function refreshNodes() {
-    const response = await fetch("/api/nodes");
+    const headers = state.nodesEtag ? { "If-None-Match": state.nodesEtag } : {};
+    const response = await fetch("/api/nodes", { headers });
+    if (response.status === 304) {
+        document.getElementById("clock").textContent = `Last checked: ${new Date().toLocaleTimeString("en-US", { hour12: false })}`;
+        return;
+    }
     if (!response.ok) throw new Error(`nodes request failed: ${response.status}`);
+    state.nodesEtag = response.headers.get("ETag") || "";
     const data = await response.json();
     state.nodes = data.nodes || [];
     renderCards();
@@ -104,4 +114,24 @@ refreshNodes().catch((error) => {
     console.error(error);
     document.getElementById("clock").textContent = "Sync failed";
 });
-state.refreshTimer = setInterval(() => refreshNodes().catch(console.error), 5000);
+
+function scheduleRefresh() {
+    window.clearTimeout(state.refreshTimer);
+    const delay = document.hidden ? HIDDEN_REFRESH_MS : VISIBLE_REFRESH_MS;
+    state.refreshTimer = window.setTimeout(async () => {
+        try {
+            await refreshNodes();
+        } catch (error) {
+            console.error(error);
+        } finally {
+            scheduleRefresh();
+        }
+    }, delay);
+}
+
+document.addEventListener("visibilitychange", () => {
+    scheduleRefresh();
+    if (!document.hidden) refreshNodes().catch(console.error);
+});
+
+scheduleRefresh();

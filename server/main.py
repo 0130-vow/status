@@ -228,7 +228,7 @@ def admin(request: Request) -> HTMLResponse:
 
 
 @app.get("/api/nodes")
-def nodes() -> dict[str, Any]:
+def nodes(request: Request, response: Response):
     config = current_config()
     names_by_hostname = {
         agent.hostname: (agent.name or agent.hostname)
@@ -237,18 +237,46 @@ def nodes() -> dict[str, Any]:
     nodes_list = STORE.list_nodes(config.alert.thresholds, config.server.stale_after_seconds)
     for node in nodes_list:
         node["name"] = names_by_hostname.get(node["hostname"], node["name"])
-    return {
+    payload = {
         "nodes": nodes_list,
+        "thresholds": config.alert.thresholds,
+        "stale_after_seconds": config.server.stale_after_seconds,
+    }
+    etag = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "private, max-age=3"})
+    response.headers["ETag"] = etag
+    response.headers["Cache-Control"] = "private, max-age=3"
+    return payload
+
+
+@app.get("/api/nodes/{hostname}")
+def node(hostname: str) -> dict[str, Any]:
+    config = current_config()
+    node_item = STORE.get_node(hostname, config.alert.thresholds, config.server.stale_after_seconds)
+    if not node_item:
+        raise HTTPException(status_code=404, detail="node not found")
+    agent = config.agents_by_hostname.get(hostname)
+    if agent:
+        node_item["name"] = agent.name or agent.hostname
+    return {
+        "node": node_item,
         "thresholds": config.alert.thresholds,
         "stale_after_seconds": config.server.stale_after_seconds,
     }
 
 
 @app.get("/api/nodes/{hostname}/history")
-def node_history(hostname: str, hours: int = 1) -> dict[str, Any]:
+def node_history(hostname: str, hours: int = 1, max_points: int = 240) -> dict[str, Any]:
     if hours not in {1, 6, 24}:
         raise HTTPException(status_code=400, detail="hours must be one of 1, 6, 24")
-    return {"hostname": hostname, "hours": hours, "points": STORE.history(hostname, hours)}
+    bounded_points = max(30, min(max_points, 1000))
+    return {
+        "hostname": hostname,
+        "hours": hours,
+        "max_points": bounded_points,
+        "points": STORE.history(hostname, hours, bounded_points),
+    }
 
 
 @app.get("/api/admin/session")

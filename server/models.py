@@ -181,9 +181,41 @@ class MetricStore:
             "net_down_bps": net_down_bps,
         }
 
-    def list_nodes(self, thresholds: dict[str, float], stale_after_seconds: int) -> list[dict[str, Any]]:
+    def _node_from_row(self, row: sqlite3.Row, thresholds: dict[str, float], stale_after_seconds: int) -> dict[str, Any]:
         stale_delta = timedelta(seconds=stale_after_seconds)
-        now = utc_now()
+        last_seen = parse_ts(row["last_seen"])
+        offline = utc_now() - last_seen > stale_delta
+        warn = any(
+            float(row[metric]) >= limit
+            for metric, limit in thresholds.items()
+            if metric in row.keys() and row[metric] is not None
+        )
+        services = json.loads(row["services_json"] or "[]")
+        if any(svc.get("status") not in {"running", "ok"} for svc in services):
+            warn = True
+
+        return {
+            "hostname": row["hostname"],
+            "name": row["hostname"],
+            "status": "offline" if offline else ("warn" if warn else "online"),
+            "last_seen": row["last_seen"],
+            "timestamp": row["timestamp"],
+            "os": row["os"] or "",
+            "ip": row["ip"] or "",
+            "cpu_model": row["cpu_model"] or "",
+            "location": row["location"] or "",
+            "uptime_seconds": int(row["uptime_seconds"] or 0),
+            "cpu_percent": float(row["cpu_percent"]),
+            "memory_percent": float(row["memory_percent"]),
+            "disk_percent": float(row["disk_percent"]),
+            "net_sent": int(row["net_sent"]),
+            "net_recv": int(row["net_recv"]),
+            "net_up_bps": float(row["net_up_bps"]),
+            "net_down_bps": float(row["net_down_bps"]),
+            "services": services,
+        }
+
+    def list_nodes(self, thresholds: dict[str, float], stale_after_seconds: int) -> list[dict[str, Any]]:
         with self._lock, self.connect() as conn:
             rows = conn.execute(
                 """
@@ -202,44 +234,36 @@ class MetricStore:
                 """
             ).fetchall()
 
-        nodes: list[dict[str, Any]] = []
-        for row in rows:
-            last_seen = parse_ts(row["last_seen"])
-            offline = now - last_seen > stale_delta
-            warn = any(
-                float(row[metric]) >= limit
-                for metric, limit in thresholds.items()
-                if metric in row.keys() and row[metric] is not None
-            )
-            services = json.loads(row["services_json"] or "[]")
-            if any(svc.get("status") not in {"running", "ok"} for svc in services):
-                warn = True
+        return [self._node_from_row(row, thresholds, stale_after_seconds) for row in rows]
 
-            nodes.append(
-                {
-                    "hostname": row["hostname"],
-                    "name": row["hostname"],
-                    "status": "offline" if offline else ("warn" if warn else "online"),
-                    "last_seen": row["last_seen"],
-                    "timestamp": row["timestamp"],
-                    "os": row["os"] or "",
-                    "ip": row["ip"] or "",
-                    "cpu_model": row["cpu_model"] or "",
-                    "location": row["location"] or "",
-                    "uptime_seconds": int(row["uptime_seconds"] or 0),
-                    "cpu_percent": float(row["cpu_percent"]),
-                    "memory_percent": float(row["memory_percent"]),
-                    "disk_percent": float(row["disk_percent"]),
-                    "net_sent": int(row["net_sent"]),
-                    "net_recv": int(row["net_recv"]),
-                    "net_up_bps": float(row["net_up_bps"]),
-                    "net_down_bps": float(row["net_down_bps"]),
-                    "services": services,
-                }
-            )
-        return nodes
+    def get_node(
+        self,
+        hostname: str,
+        thresholds: dict[str, float],
+        stale_after_seconds: int,
+    ) -> dict[str, Any] | None:
+        with self._lock, self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT n.*, m.cpu_percent, m.memory_percent, m.disk_percent,
+                       m.net_sent, m.net_recv, m.net_up_bps, m.net_down_bps,
+                       m.timestamp
+                FROM nodes n
+                JOIN metrics m ON m.id = (
+                    SELECT id FROM metrics
+                    WHERE hostname = n.hostname
+                    ORDER BY id DESC
+                    LIMIT 1
+                )
+                WHERE n.hostname = ?
+                """,
+                (hostname,),
+            ).fetchone()
+        if not row:
+            return None
+        return self._node_from_row(row, thresholds, stale_after_seconds)
 
-    def history(self, hostname: str, hours: int) -> list[dict[str, Any]]:
+    def history(self, hostname: str, hours: int, max_points: int = 240) -> list[dict[str, Any]]:
         cutoff = utc_now() - timedelta(hours=hours)
         with self._lock, self.connect() as conn:
             rows = conn.execute(
@@ -258,7 +282,19 @@ class MetricStore:
             item = dict(row)
             item["services"] = json.loads(item.pop("services_json") or "[]")
             points.append(item)
-        return points
+        if max_points <= 0 or len(points) <= max_points:
+            return points
+
+        sampled: list[dict[str, Any]] = []
+        last_bucket = -1
+        for index, point in enumerate(points):
+            bucket = int(index * max_points / len(points))
+            if bucket != last_bucket:
+                sampled.append(point)
+                last_bucket = bucket
+        if sampled[-1]["timestamp"] != points[-1]["timestamp"]:
+            sampled[-1] = points[-1]
+        return sampled
 
     def get_alert_state(self, hostname: str, metric: str) -> dict[str, Any] | None:
         with self._lock, self.connect() as conn:

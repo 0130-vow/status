@@ -3,10 +3,14 @@ const state = {
     node: null,
     chart: null,
     activeHours: 1,
-    refreshTimer: null,
+    nodeRefreshTimer: null,
+    historyRefreshTimer: null,
 };
 
 const CHART_COLORS = ["#14b8a6", "#818cf8", "#22c55e", "#7dd3fc", "#a78bfa", "#f59e0b"];
+const NODE_REFRESH_MS = 15000;
+const HIDDEN_NODE_REFRESH_MS = 60000;
+const HISTORY_REFRESH_MS = 60000;
 
 const statusClass = (status) => {
     if (status === "warn") return "warn";
@@ -64,10 +68,14 @@ function renderServices(services) {
 }
 
 async function refreshNode() {
-    const response = await fetch("/api/nodes");
-    if (!response.ok) throw new Error(`nodes request failed: ${response.status}`);
+    const response = await fetch(`/api/nodes/${encodeURIComponent(state.hostname)}`);
+    if (response.status === 404) {
+        setMissing(true);
+        return;
+    }
+    if (!response.ok) throw new Error(`node request failed: ${response.status}`);
     const data = await response.json();
-    const node = (data.nodes || []).find((item) => item.hostname === state.hostname);
+    const node = data.node;
     setMissing(!node);
     if (!node) return;
 
@@ -77,7 +85,7 @@ async function refreshNode() {
 }
 
 async function renderHistory(hours) {
-    const response = await fetch(`/api/nodes/${encodeURIComponent(state.hostname)}/history?hours=${hours}`);
+    const response = await fetch(`/api/nodes/${encodeURIComponent(state.hostname)}/history?hours=${hours}&max_points=240`);
     if (!response.ok) throw new Error(`history request failed: ${response.status}`);
     const data = await response.json();
     const points = data.points || [];
@@ -175,7 +183,40 @@ Promise.all([refreshNode(), renderHistory(state.activeHours)]).catch((error) => 
     document.getElementById("clock").textContent = "Sync failed";
 });
 
-state.refreshTimer = setInterval(async () => {
-    await refreshNode();
-    await renderHistory(state.activeHours);
-}, 5000);
+function scheduleNodeRefresh() {
+    window.clearTimeout(state.nodeRefreshTimer);
+    const delay = document.hidden ? HIDDEN_NODE_REFRESH_MS : NODE_REFRESH_MS;
+    state.nodeRefreshTimer = window.setTimeout(async () => {
+        try {
+            await refreshNode();
+        } catch (error) {
+            console.error(error);
+        } finally {
+            scheduleNodeRefresh();
+        }
+    }, delay);
+}
+
+function scheduleHistoryRefresh() {
+    window.clearTimeout(state.historyRefreshTimer);
+    state.historyRefreshTimer = window.setTimeout(async () => {
+        try {
+            if (!document.hidden) await renderHistory(state.activeHours);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            scheduleHistoryRefresh();
+        }
+    }, HISTORY_REFRESH_MS);
+}
+
+document.addEventListener("visibilitychange", () => {
+    scheduleNodeRefresh();
+    if (!document.hidden) {
+        refreshNode().catch(console.error);
+        renderHistory(state.activeHours).catch(console.error);
+    }
+});
+
+scheduleNodeRefresh();
+scheduleHistoryRefresh();
