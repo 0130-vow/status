@@ -21,7 +21,7 @@ Options:
   --service-interval
                 Service check interval seconds. Default: 300.
   --config-interval
-                Controller config pull interval seconds. Default: 300.
+                Legacy controller config pull interval seconds. Default: 0, disabled.
   --services    Comma separated checks. Examples: "ssh:22,广东电信:202.96.128.86:53,docker:process=dockerd"
   --public-ip   IP shown on dashboard. Default: auto-detected local IP by agent.
   --location    Free-form location label.
@@ -40,7 +40,7 @@ TOKEN=""
 HOSTNAME="$(hostname)"
 INTERVAL="60"
 SERVICE_INTERVAL="300"
-CONFIG_INTERVAL="300"
+CONFIG_INTERVAL="0"
 SERVICES="广东电信:202.96.128.86:53,广东移动:211.136.192.6:53,广东联通:210.21.196.6:53,中国香港:1.1.1.1:443,美国洛杉矶:8.8.8.8:443"
 PUBLIC_IP=""
 LOCATION=""

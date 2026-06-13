@@ -17,7 +17,7 @@ import requests
 
 DEFAULT_CONFIG = Path(__file__).with_name("config.ini")
 DEFAULT_SERVICE_INTERVAL_SECONDS = 300
-DEFAULT_CONFIG_INTERVAL_SECONDS = 300
+DEFAULT_CONFIG_INTERVAL_SECONDS = 0
 MAX_BACKOFF_SECONDS = 300
 
 
@@ -129,17 +129,21 @@ class AgentRuntime:
 
     def config_interval_seconds(self) -> int:
         configured = self.collect.get("config_interval_seconds", "")
-        if configured:
-            return max(30, int(configured))
-        return max(DEFAULT_CONFIG_INTERVAL_SECONDS, self.interval_seconds() * 5)
+        if configured != "":
+            return max(0, int(configured))
+        return DEFAULT_CONFIG_INTERVAL_SECONDS
 
     def jitter_seconds(self, base: float | None = None) -> float:
         interval = base if base is not None else self.interval_seconds()
         return random.uniform(0, max(1.0, interval * 0.15))
 
     def maybe_apply_remote_config(self, force: bool = False) -> None:
+        config_interval = self.config_interval_seconds()
+        if config_interval <= 0 and not force:
+            return
+
         now = time.monotonic()
-        if not force and now - self._last_config_check < self.config_interval_seconds():
+        if not force and now - self._last_config_check < config_interval:
             return
 
         self._last_config_check = now
@@ -160,7 +164,10 @@ class AgentRuntime:
         except requests.RequestException:
             return
 
-        for key in ("services", "public_ip", "location"):
+        self.apply_remote_config(remote)
+
+    def apply_remote_config(self, remote: dict[str, Any]) -> None:
+        for key in ("services", "public_ip", "location", "config_version"):
             value = remote.get(key)
             if value is not None:
                 self.collect[key] = str(value)
@@ -168,6 +175,12 @@ class AgentRuntime:
         interval = remote.get("interval_seconds")
         if interval:
             self.collect["interval_seconds"] = str(interval)
+        service_interval = remote.get("service_interval_seconds")
+        if service_interval is not None:
+            self.collect["service_interval_seconds"] = str(service_interval)
+        config_interval = remote.get("config_interval_seconds")
+        if config_interval is not None:
+            self.collect["config_interval_seconds"] = str(config_interval)
 
     def services(self) -> list[dict[str, Any]]:
         raw = self.collect.get("services", "")
@@ -199,6 +212,7 @@ class AgentRuntime:
             "ip": collect.get("public_ip") or self._local_ip,
             "cpu_model": self._cpu_model,
             "location": collect.get("location", ""),
+            "config_version": collect.get("config_version", ""),
             "services": self.services(),
         }
 
@@ -213,7 +227,13 @@ class AgentRuntime:
             timeout=10,
         )
         response.raise_for_status()
-        return {"payload": payload, "response": response.json()}
+        data = response.json()
+        remote = data.get("config")
+        if isinstance(remote, dict):
+            self.apply_remote_config(remote)
+        elif data.get("config_version"):
+            self.collect["config_version"] = str(data["config_version"])
+        return {"payload": payload, "response": data}
 
 
 def collect_payload(config: configparser.ConfigParser) -> dict[str, Any]:
@@ -227,7 +247,6 @@ def apply_remote_config(config: configparser.ConfigParser) -> None:
 
 def report_once(config: configparser.ConfigParser) -> dict[str, Any]:
     runtime = AgentRuntime(config)
-    runtime.maybe_apply_remote_config(force=True)
     return runtime.report_once()
 
 
@@ -242,7 +261,6 @@ def main() -> None:
 
     while True:
         try:
-            runtime.maybe_apply_remote_config(force=args.once)
             result = runtime.report_once()
             failures = 0
             print(json.dumps(result, ensure_ascii=False), flush=True)

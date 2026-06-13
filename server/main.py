@@ -41,6 +41,8 @@ DEFAULT_AGENT_SERVICES = "广东电信:202.96.128.86:53,广东移动:211.136.192
 CONFIG_CACHE_LOCK = threading.Lock()
 CONFIG_CACHE = CONFIG
 CONFIG_CACHE_MTIME_NS = CONFIG_PATH.stat().st_mtime_ns if CONFIG_PATH.exists() else 0
+CONFIG_VERSION_CACHE = ""
+CONFIG_VERSION_CACHE_MTIME_NS = 0
 
 app = FastAPI(title="Probe", version="0.1.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -67,6 +69,7 @@ class ReportPayload(BaseModel):
     ip: str = ""
     cpu_model: str = ""
     location: str = ""
+    config_version: str = ""
     services: list[ServiceStatus] = Field(default_factory=list)
 
 
@@ -111,6 +114,38 @@ def current_config():
             CONFIG_CACHE = load_config(CONFIG_PATH)
             CONFIG_CACHE_MTIME_NS = mtime_ns
         return CONFIG_CACHE
+
+
+def current_config_version() -> str:
+    global CONFIG_VERSION_CACHE, CONFIG_VERSION_CACHE_MTIME_NS
+    mtime_ns = CONFIG_PATH.stat().st_mtime_ns if CONFIG_PATH.exists() else 0
+    if CONFIG_VERSION_CACHE and mtime_ns == CONFIG_VERSION_CACHE_MTIME_NS:
+        return CONFIG_VERSION_CACHE
+
+    with CONFIG_CACHE_LOCK:
+        mtime_ns = CONFIG_PATH.stat().st_mtime_ns if CONFIG_PATH.exists() else 0
+        if CONFIG_VERSION_CACHE and mtime_ns == CONFIG_VERSION_CACHE_MTIME_NS:
+            return CONFIG_VERSION_CACHE
+        try:
+            raw = CONFIG_PATH.read_bytes()
+        except OSError:
+            raw = b""
+        CONFIG_VERSION_CACHE = hashlib.sha256(raw).hexdigest()[:16]
+        CONFIG_VERSION_CACHE_MTIME_NS = mtime_ns
+        return CONFIG_VERSION_CACHE
+
+
+def agent_remote_payload(agent: Any, config_version: str) -> dict[str, Any]:
+    return {
+        "hostname": agent.hostname,
+        "config_version": config_version,
+        "services": agent.services or DEFAULT_AGENT_SERVICES,
+        "interval_seconds": agent.interval_seconds or 60,
+        "service_interval_seconds": 300,
+        "config_interval_seconds": 0,
+        "public_ip": agent.public_ip,
+        "location": agent.location,
+    }
 
 
 def cookie_secure(request: Request) -> bool:
@@ -323,11 +358,13 @@ def read_config_raw() -> dict[str, Any]:
 
 
 def write_config_raw(raw: dict[str, Any]) -> None:
-    global CONFIG_CACHE, CONFIG_CACHE_MTIME_NS
+    global CONFIG_CACHE, CONFIG_CACHE_MTIME_NS, CONFIG_VERSION_CACHE, CONFIG_VERSION_CACHE_MTIME_NS
     CONFIG_PATH.write_text(yaml.safe_dump(raw, allow_unicode=True, sort_keys=False), encoding="utf-8")
     with CONFIG_CACHE_LOCK:
         CONFIG_CACHE = load_config(CONFIG_PATH)
         CONFIG_CACHE_MTIME_NS = CONFIG_PATH.stat().st_mtime_ns
+        CONFIG_VERSION_CACHE = hashlib.sha256(CONFIG_PATH.read_bytes()).hexdigest()[:16]
+        CONFIG_VERSION_CACHE_MTIME_NS = CONFIG_CACHE_MTIME_NS
 
 
 def write_agent_credential(payload: RegisterAgentPayload, token: str) -> None:
@@ -416,19 +453,16 @@ def agent_payload_from_config(agent: Any, request: Request) -> RegisterAgentPayl
     )
 
 
+def configured_agent(hostname: str):
+    return current_config().agents_by_hostname.get(hostname)
+
+
 @app.get("/api/agent/config/{hostname}")
 def agent_remote_config(hostname: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
     require_agent_hostname(hostname, authorization)
-    config = current_config()
-    for agent in config.server.agents:
-        if agent.hostname == hostname:
-            return {
-                "hostname": agent.hostname,
-                "services": agent.services,
-                "interval_seconds": agent.interval_seconds,
-                "public_ip": agent.public_ip,
-                "location": agent.location,
-            }
+    agent = configured_agent(hostname)
+    if agent:
+        return agent_remote_payload(agent, current_config_version())
     raise HTTPException(status_code=404, detail="agent not found")
 
 
@@ -520,7 +554,18 @@ def report(payload: ReportPayload, authorization: str | None = Header(default=No
     require_agent(payload, authorization)
     saved = STORE.save_report(payload.dict())
     check_alerts(saved)
-    return {"ok": True, "hostname": payload.hostname}
+    config_version = current_config_version()
+    agent = configured_agent(payload.hostname)
+    response: dict[str, Any] = {
+        "ok": True,
+        "hostname": payload.hostname,
+        "config_version": config_version,
+        "next_interval_seconds": (agent.interval_seconds if agent else None) or 60,
+    }
+    if payload.config_version != config_version:
+        if agent:
+            response["config"] = agent_remote_payload(agent, config_version)
+    return response
 
 
 def main() -> None:
