@@ -20,6 +20,7 @@ class AgentCredential:
     name: str = ""
     services: str = ""
     interval_seconds: int | None = None
+    service_interval_seconds: int | None = None
     public_ip: str = ""
     location: str = ""
 
@@ -110,6 +111,9 @@ def load_config(path: str | Path | None = None) -> AppConfig:
             name=str(item.get("name", "")),
             services=str(item.get("services", "")),
             interval_seconds=int(item["interval_seconds"]) if item.get("interval_seconds") else None,
+            service_interval_seconds=(
+                int(item["service_interval_seconds"]) if item.get("service_interval_seconds") else None
+            ),
             public_ip=str(item.get("public_ip", "")),
             location=str(item.get("location", "")),
         )

@@ -5,12 +5,16 @@ const batchAgentPanel = document.getElementById("batch-agent-panel");
 const usernameInput = document.getElementById("admin-username");
 const passwordInput = document.getElementById("admin-password");
 const loginStatusEl = document.getElementById("login-status");
+const profileInput = document.getElementById("profile");
 const hostnameInput = document.getElementById("hostname");
 const serverUrlInput = document.getElementById("server-url");
 const intervalInput = document.getElementById("interval");
+const serviceIntervalInput = document.getElementById("service-interval");
 const servicesInput = document.getElementById("services");
+const batchProfileInput = document.getElementById("batch-profile");
 const batchServerUrlInput = document.getElementById("batch-server-url");
 const batchIntervalInput = document.getElementById("batch-interval");
+const batchServiceIntervalInput = document.getElementById("batch-service-interval");
 const batchServicesInput = document.getElementById("batch-services");
 const batchAgentsInput = document.getElementById("batch-agents");
 const publicIpInput = document.getElementById("public-ip");
@@ -30,6 +34,11 @@ const commandText = document.getElementById("install-command");
 const sessionUserEl = document.getElementById("session-user");
 const logoutBtn = document.getElementById("logout-btn");
 const defaultServices = "广东电信:202.96.128.86:53,广东移动:211.136.192.6:53,广东联通:210.21.196.6:53,中国香港:1.1.1.1:443,美国洛杉矶:8.8.8.8:443";
+const strategyProfiles = {
+    low: { interval: 120, serviceInterval: 600 },
+    standard: { interval: 60, serviceInterval: 300 },
+    high: { interval: 30, serviceInterval: 120 },
+};
 
 const state = {
     agents: [],
@@ -59,6 +68,12 @@ function showCommand(title, command) {
     commandTitle.textContent = title;
     commandText.value = command;
     commandBox.hidden = false;
+}
+
+function applyStrategyProfile(profileName, intervalField, serviceIntervalField) {
+    const profile = strategyProfiles[profileName] || strategyProfiles.standard;
+    intervalField.value = String(profile.interval);
+    serviceIntervalField.value = String(profile.serviceInterval);
 }
 
 function selectedAgents() {
@@ -247,6 +262,10 @@ function renderEditForm() {
                 <input class="agent-interval-input" type="number" min="5" value="${Number(agent.interval_seconds || 60)}">
             </label>
             <label>
+                <span>探活间隔</span>
+                <input class="agent-service-interval-input" type="number" min="5" value="${Number(agent.service_interval_seconds || 300)}">
+            </label>
+            <label>
                 <span>公网 IP</span>
                 <input class="agent-public-ip-input" type="text" value="${escapeHtml(agent.public_ip || "")}" placeholder="可留空">
             </label>
@@ -303,6 +322,7 @@ function readAgentForm(card) {
         name: card.querySelector(".agent-name-input").value.trim(),
         services: servicesField.value.trim() || servicesField.placeholder.trim() || defaultServices,
         interval_seconds: Number(card.querySelector(".agent-interval-input").value || 60),
+        service_interval_seconds: Number(card.querySelector(".agent-service-interval-input").value || 300),
         public_ip: card.querySelector(".agent-public-ip-input").value.trim(),
         location: card.querySelector(".agent-location-input").value.trim(),
     };
@@ -397,6 +417,14 @@ document.getElementById("refresh-agents-btn").addEventListener("click", () => {
     loadAgents().catch((error) => setStatus(statusEl, error.message, true));
 });
 
+profileInput.addEventListener("change", () => {
+    applyStrategyProfile(profileInput.value, intervalInput, serviceIntervalInput);
+});
+
+batchProfileInput.addEventListener("change", () => {
+    applyStrategyProfile(batchProfileInput.value, batchIntervalInput, batchServiceIntervalInput);
+});
+
 selectAllAgentsInput.addEventListener("change", () => {
     state.selectedHostnames.clear();
     if (selectAllAgentsInput.checked) {
@@ -430,6 +458,7 @@ document.getElementById("register-btn").addEventListener("click", async () => {
                 hostname,
                 server_url: serverUrlInput.value.trim(),
                 interval_seconds: Number(intervalInput.value || 60),
+                service_interval_seconds: Number(serviceIntervalInput.value || 300),
                 services: servicesInput.value.trim() || defaultServices,
                 public_ip: publicIpInput.value.trim(),
                 location: locationInput.value.trim(),
@@ -460,6 +489,7 @@ document.getElementById("batch-register-btn").addEventListener("click", async ()
             body: JSON.stringify({
                 server_url: batchServerUrlInput.value.trim(),
                 interval_seconds: Number(batchIntervalInput.value || 60),
+                service_interval_seconds: Number(batchServiceIntervalInput.value || 300),
                 services: batchServicesInput.value.trim() || defaultServices,
                 agents,
             }),

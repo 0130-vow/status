@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Probe Admin</title>
-    <link rel="stylesheet" href="/static/style.css?v=bulk-agent-actions-1">
+    <link rel="stylesheet" href="/static/style.css?v=strategy-profiles-1">
 </head>
 <body>
     <div class="container admin-container">
@@ -45,6 +45,14 @@
                 </div>
                 <div class="admin-grid">
                     <label>
+                        <span>策略模板</span>
+                        <select id="profile">
+                            <option value="standard">标准</option>
+                            <option value="low">低负载</option>
+                            <option value="high">高频</option>
+                        </select>
+                    </label>
+                    <label>
                         <span>节点标识</span>
                         <input id="hostname" type="text" placeholder="node-02">
                     </label>
@@ -55,6 +63,10 @@
                     <label>
                         <span>上报间隔</span>
                         <input id="interval" type="number" min="5" value="60">
+                    </label>
+                    <label>
+                        <span>探活间隔</span>
+                        <input id="service-interval" type="number" min="5" value="300">
                     </label>
                     <label>
                         <span>服务探活</span>
@@ -83,12 +95,24 @@
                 </div>
                 <div class="admin-grid">
                     <label>
+                        <span>策略模板</span>
+                        <select id="batch-profile">
+                            <option value="standard">标准</option>
+                            <option value="low">低负载</option>
+                            <option value="high">高频</option>
+                        </select>
+                    </label>
+                    <label>
                         <span>主控地址</span>
                         <input id="batch-server-url" type="url">
                     </label>
                     <label>
                         <span>上报间隔</span>
                         <input id="batch-interval" type="number" min="5" value="60">
+                    </label>
+                    <label>
+                        <span>探活间隔</span>
+                        <input id="batch-service-interval" type="number" min="5" value="300">
                     </label>
                     <label class="wide-field">
                         <span>默认服务探活</span>
@@ -150,6 +174,6 @@
         </section>
     </div>
 
-    <script src="/static/admin.js?v=bulk-agent-actions-1"></script>
+    <script src="/static/admin.js?v=strategy-profiles-1"></script>
 </body>
 </html>

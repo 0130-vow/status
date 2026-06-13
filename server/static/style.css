@@ -501,6 +501,7 @@ header p {
 }
 
 .admin-grid input,
+.admin-grid select,
 .admin-grid textarea,
 .command-box textarea {
     width: 100%;
@@ -513,6 +514,7 @@ header p {
 }
 
 .admin-grid input:focus,
+.admin-grid select:focus,
 .admin-grid textarea:focus,
 .command-box textarea:focus {
     border-color: #9ca3af;

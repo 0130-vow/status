@@ -77,6 +77,7 @@ class RegisterAgentPayload(BaseModel):
     hostname: str = Field(min_length=1, max_length=128)
     server_url: str = "https://status.777702.xyz"
     interval_seconds: int = Field(default=60, ge=5, le=86400)
+    service_interval_seconds: int = Field(default=300, ge=5, le=86400)
     services: str = DEFAULT_AGENT_SERVICES
     public_ip: str = ""
     location: str = ""
@@ -94,6 +95,7 @@ class BatchAgentItem(BaseModel):
 class BatchRegisterAgentPayload(BaseModel):
     server_url: str = "https://status.777702.xyz"
     interval_seconds: int = Field(default=60, ge=5, le=86400)
+    service_interval_seconds: int = Field(default=300, ge=5, le=86400)
     services: str = DEFAULT_AGENT_SERVICES
     agents: list[BatchAgentItem] = Field(default_factory=list)
 
@@ -102,6 +104,7 @@ class UpdateAgentPayload(BaseModel):
     name: str = Field(default="", max_length=128)
     services: str = DEFAULT_AGENT_SERVICES
     interval_seconds: int = Field(default=60, ge=5, le=86400)
+    service_interval_seconds: int = Field(default=300, ge=5, le=86400)
     public_ip: str = ""
     location: str = ""
 
@@ -156,7 +159,7 @@ def agent_remote_payload(agent: Any, config_version: str) -> dict[str, Any]:
         "config_version": config_version,
         "services": agent.services or DEFAULT_AGENT_SERVICES,
         "interval_seconds": agent.interval_seconds or 60,
-        "service_interval_seconds": 300,
+        "service_interval_seconds": agent.service_interval_seconds or 300,
         "config_interval_seconds": 0,
         "public_ip": agent.public_ip,
         "location": agent.location,
@@ -394,6 +397,7 @@ def write_agent_credential(payload: RegisterAgentPayload, token: str) -> None:
             "token": token,
             "services": payload.services,
             "interval_seconds": payload.interval_seconds,
+            "service_interval_seconds": payload.service_interval_seconds,
             "public_ip": payload.public_ip,
             "location": payload.location,
         }
@@ -431,6 +435,7 @@ def write_agent_credentials_batch(
         token = str(existing.get("token") or secrets.token_hex(32))
         services = item.services.strip() or payload.services or DEFAULT_AGENT_SERVICES
         interval_seconds = payload.interval_seconds
+        service_interval_seconds = payload.service_interval_seconds
         public_ip = item.public_ip.strip() or str(existing.get("public_ip", ""))
         location = item.location.strip() or str(existing.get("location", ""))
         name = item.name.strip() or str(existing.get("name", "")) or hostname
@@ -438,6 +443,7 @@ def write_agent_credentials_batch(
             hostname=hostname,
             server_url=payload.server_url,
             interval_seconds=interval_seconds,
+            service_interval_seconds=service_interval_seconds,
             services=services,
             public_ip=public_ip,
             location=location,
@@ -451,6 +457,7 @@ def write_agent_credentials_batch(
                 "token": token,
                 "services": services,
                 "interval_seconds": interval_seconds,
+                "service_interval_seconds": service_interval_seconds,
                 "public_ip": public_ip,
                 "location": location,
             }
@@ -478,6 +485,7 @@ def update_agent_config(hostname: str, payload: UpdateAgentPayload) -> dict[str,
             agent["name"] = payload.name.strip() or hostname
             agent["services"] = payload.services
             agent["interval_seconds"] = payload.interval_seconds
+            agent["service_interval_seconds"] = payload.service_interval_seconds
             agent["public_ip"] = payload.public_ip
             agent["location"] = payload.location
             write_config_raw(raw)
@@ -503,6 +511,7 @@ def build_install_command(payload: RegisterAgentPayload, token: str) -> str:
         f"--hostname {shlex.quote(payload.hostname)}",
         f"--token {shlex.quote(token)}",
         f"--interval {payload.interval_seconds}",
+        f"--service-interval {payload.service_interval_seconds}",
     ]
     if services:
         parts.append(f"--services {shlex.quote(services)}")
@@ -530,6 +539,7 @@ def agent_payload_from_config(agent: Any, request: Request) -> RegisterAgentPayl
         hostname=agent.hostname,
         server_url=request_server_url(request),
         interval_seconds=agent.interval_seconds or 60,
+        service_interval_seconds=agent.service_interval_seconds or 300,
         services=agent.services or DEFAULT_AGENT_SERVICES,
         public_ip=agent.public_ip,
         location=agent.location,
@@ -567,6 +577,7 @@ def admin_agents(request: Request) -> dict[str, Any]:
                 "name": agent.name or agent.hostname,
                 "services": agent.services,
                 "interval_seconds": agent.interval_seconds or 60,
+                "service_interval_seconds": agent.service_interval_seconds or 300,
                 "public_ip": agent.public_ip,
                 "location": agent.location,
                 "node": nodes_by_hostname.get(agent.hostname),
@@ -634,6 +645,7 @@ def save_agent(
         hostname=hostname,
         server_url=request_server_url(request),
         interval_seconds=payload.interval_seconds,
+        service_interval_seconds=payload.service_interval_seconds,
         services=payload.services,
         public_ip=payload.public_ip,
         location=payload.location,
