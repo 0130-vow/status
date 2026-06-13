@@ -31,6 +31,7 @@ const agentEmpty = document.getElementById("agent-empty");
 const commandBox = document.getElementById("command-box");
 const commandTitle = document.getElementById("command-title");
 const commandText = document.getElementById("install-command");
+const copyBtn = document.getElementById("copy-btn");
 const sessionUserEl = document.getElementById("session-user");
 const logoutBtn = document.getElementById("logout-btn");
 const defaultServices = "广东电信:202.96.128.86:53,广东移动:211.136.192.6:53,广东联通:210.21.196.6:53,中国香港:1.1.1.1:443,美国洛杉矶:8.8.8.8:443";
@@ -64,10 +65,42 @@ function setStatus(element, message, isError = false) {
     element.className = isError ? "admin-error" : "admin-ok";
 }
 
+let copyResetTimer = null;
+
+function resetCopyButton() {
+    window.clearTimeout(copyResetTimer);
+    copyBtn.textContent = "Copy";
+    copyBtn.classList.remove("copy-ok", "copy-error");
+}
+
+function setCopyFeedback(message, isError = false) {
+    window.clearTimeout(copyResetTimer);
+    copyBtn.textContent = message;
+    copyBtn.classList.toggle("copy-ok", !isError);
+    copyBtn.classList.toggle("copy-error", isError);
+    copyResetTimer = window.setTimeout(resetCopyButton, 1600);
+}
+
+async function copyTextToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    commandText.focus();
+    commandText.select();
+    const copied = document.execCommand("copy");
+    commandText.setSelectionRange(0, 0);
+    if (!copied) {
+        throw new Error("copy failed");
+    }
+}
+
 function showCommand(title, command) {
     commandTitle.textContent = title;
     commandText.value = command;
     commandBox.hidden = false;
+    resetCopyButton();
 }
 
 function applyStrategyProfile(profileName, intervalField, serviceIntervalField) {
@@ -503,9 +536,15 @@ document.getElementById("batch-register-btn").addEventListener("click", async ()
     }
 });
 
-document.getElementById("copy-btn").addEventListener("click", async () => {
-    await navigator.clipboard.writeText(commandText.value);
-    setStatus(statusEl, "已复制");
+copyBtn.addEventListener("click", async () => {
+    try {
+        await copyTextToClipboard(commandText.value);
+        setStatus(statusEl, "已复制");
+        setCopyFeedback("已复制");
+    } catch (error) {
+        setStatus(statusEl, "复制失败，请手动选择命令复制", true);
+        setCopyFeedback("复制失败", true);
+    }
 });
 
 loadSession().catch(() => setLoggedOut());

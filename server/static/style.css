@@ -563,6 +563,18 @@ header p {
     color: var(--text-main);
 }
 
+.ghost-btn.copy-ok {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: var(--status-up);
+}
+
+.ghost-btn.copy-error {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: var(--status-down);
+}
+
 #admin-status,
 #batch-status {
     color: var(--text-muted);
