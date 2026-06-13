@@ -187,16 +187,17 @@ class MetricStore:
         with self._lock, self.connect() as conn:
             rows = conn.execute(
                 """
+                WITH latest AS (
+                    SELECT hostname, MAX(id) AS id
+                    FROM metrics
+                    GROUP BY hostname
+                )
                 SELECT n.*, m.cpu_percent, m.memory_percent, m.disk_percent,
                        m.net_sent, m.net_recv, m.net_up_bps, m.net_down_bps,
                        m.timestamp
                 FROM nodes n
-                JOIN metrics m ON m.id = (
-                    SELECT id FROM metrics
-                    WHERE hostname = n.hostname
-                    ORDER BY id DESC
-                    LIMIT 1
-                )
+                JOIN latest ON latest.hostname = n.hostname
+                JOIN metrics m ON m.id = latest.id
                 ORDER BY n.hostname ASC
                 """
             ).fetchall()

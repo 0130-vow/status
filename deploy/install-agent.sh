@@ -18,6 +18,10 @@ Options:
   --token       Bearer token generated on the controller.
   --hostname    Node name. Default: system hostname.
   --interval    Report interval seconds. Default: 60.
+  --service-interval
+                Service check interval seconds. Default: 300.
+  --config-interval
+                Controller config pull interval seconds. Default: 300.
   --services    Comma separated checks. Examples: "ssh:22,广东电信:202.96.128.86:53,docker:process=dockerd"
   --public-ip   IP shown on dashboard. Default: auto-detected local IP by agent.
   --location    Free-form location label.
@@ -35,6 +39,8 @@ SERVER=""
 TOKEN=""
 HOSTNAME="$(hostname)"
 INTERVAL="60"
+SERVICE_INTERVAL="300"
+CONFIG_INTERVAL="300"
 SERVICES="广东电信:202.96.128.86:53,广东移动:211.136.192.6:53,广东联通:210.21.196.6:53,中国香港:1.1.1.1:443,美国洛杉矶:8.8.8.8:443"
 PUBLIC_IP=""
 LOCATION=""
@@ -55,6 +61,14 @@ while [ "$#" -gt 0 ]; do
       ;;
     --interval)
       INTERVAL="${2:-}"
+      shift 2
+      ;;
+    --service-interval)
+      SERVICE_INTERVAL="${2:-}"
+      shift 2
+      ;;
+    --config-interval)
+      CONFIG_INTERVAL="${2:-}"
       shift 2
       ;;
     --services)
@@ -214,6 +228,8 @@ token = $TOKEN
 [collect]
 hostname = $HOSTNAME
 interval_seconds = $INTERVAL
+service_interval_seconds = $SERVICE_INTERVAL
+config_interval_seconds = $CONFIG_INTERVAL
 services = $SERVICES
 public_ip = $PUBLIC_IP
 location = $LOCATION

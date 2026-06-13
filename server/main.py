@@ -10,6 +10,7 @@ from pathlib import Path
 import secrets
 import shlex
 import sys
+import threading
 import time
 from typing import Any
 
@@ -37,6 +38,9 @@ NOTIFIER = Notifier(CONFIG.notifier.smtp)
 SESSION_COOKIE = "probe_admin_session"
 SESSION_TTL_SECONDS = 12 * 60 * 60
 DEFAULT_AGENT_SERVICES = "广东电信:202.96.128.86:53,广东移动:211.136.192.6:53,广东联通:210.21.196.6:53,中国香港:1.1.1.1:443,美国洛杉矶:8.8.8.8:443"
+CONFIG_CACHE_LOCK = threading.Lock()
+CONFIG_CACHE = CONFIG
+CONFIG_CACHE_MTIME_NS = CONFIG_PATH.stat().st_mtime_ns if CONFIG_PATH.exists() else 0
 
 app = FastAPI(title="Probe", version="0.1.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -96,7 +100,17 @@ def startup() -> None:
 
 
 def current_config():
-    return load_config(CONFIG_PATH)
+    global CONFIG_CACHE, CONFIG_CACHE_MTIME_NS
+    mtime_ns = CONFIG_PATH.stat().st_mtime_ns if CONFIG_PATH.exists() else 0
+    if CONFIG_CACHE is not None and mtime_ns == CONFIG_CACHE_MTIME_NS:
+        return CONFIG_CACHE
+
+    with CONFIG_CACHE_LOCK:
+        mtime_ns = CONFIG_PATH.stat().st_mtime_ns if CONFIG_PATH.exists() else 0
+        if CONFIG_CACHE is None or mtime_ns != CONFIG_CACHE_MTIME_NS:
+            CONFIG_CACHE = load_config(CONFIG_PATH)
+            CONFIG_CACHE_MTIME_NS = mtime_ns
+        return CONFIG_CACHE
 
 
 def cookie_secure(request: Request) -> bool:
@@ -281,7 +295,11 @@ def read_config_raw() -> dict[str, Any]:
 
 
 def write_config_raw(raw: dict[str, Any]) -> None:
+    global CONFIG_CACHE, CONFIG_CACHE_MTIME_NS
     CONFIG_PATH.write_text(yaml.safe_dump(raw, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    with CONFIG_CACHE_LOCK:
+        CONFIG_CACHE = load_config(CONFIG_PATH)
+        CONFIG_CACHE_MTIME_NS = CONFIG_PATH.stat().st_mtime_ns
 
 
 def write_agent_credential(payload: RegisterAgentPayload, token: str) -> None:

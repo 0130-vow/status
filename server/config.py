@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
@@ -71,11 +72,13 @@ class AppConfig:
     alert: AlertSettings
     notifier: NotifierSettings
 
+    @cached_property
+    def agents_by_hostname(self) -> dict[str, AgentCredential]:
+        return {agent.hostname: agent for agent in self.server.agents}
+
     def token_for(self, hostname: str) -> str | None:
-        for agent in self.server.agents:
-            if agent.hostname == hostname:
-                return agent.token
-        return None
+        agent = self.agents_by_hostname.get(hostname)
+        return agent.token if agent else None
 
 
 def _as_path(value: str) -> Path:
