@@ -501,6 +501,7 @@ header p {
 }
 
 .admin-grid input,
+.admin-grid textarea,
 .command-box textarea {
     width: 100%;
     border: 1px solid var(--border-color);
@@ -512,9 +513,25 @@ header p {
 }
 
 .admin-grid input:focus,
+.admin-grid textarea:focus,
 .command-box textarea:focus {
     border-color: #9ca3af;
     outline: none;
+}
+
+.admin-grid textarea {
+    min-height: 160px;
+    resize: vertical;
+}
+
+.wide-field {
+    grid-column: 1 / -1;
+}
+
+.admin-hint {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin: 10px 0 0;
 }
 
 .admin-actions {
@@ -544,16 +561,19 @@ header p {
     color: var(--text-main);
 }
 
-#admin-status {
+#admin-status,
+#batch-status {
     color: var(--text-muted);
     font-size: 13px;
 }
 
-#admin-status.admin-error {
+#admin-status.admin-error,
+#batch-status.admin-error {
     color: var(--status-down);
 }
 
-#admin-status.admin-ok {
+#admin-status.admin-ok,
+#batch-status.admin-ok {
     color: var(--status-up);
 }
 

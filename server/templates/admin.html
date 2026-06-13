@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Probe Admin</title>
-    <link rel="stylesheet" href="/static/style.css?v=services-default-2">
+    <link rel="stylesheet" href="/static/style.css?v=batch-agents-1">
 </head>
 <body>
     <div class="container admin-container">
@@ -76,12 +76,43 @@
                 </div>
             </section>
 
+            <section class="admin-panel" id="batch-agent-panel" hidden>
+                <div class="detail-section-header">
+                    <h4>批量新增 Agent</h4>
+                    <button id="close-batch-btn" class="ghost-btn" type="button">收起</button>
+                </div>
+                <div class="admin-grid">
+                    <label>
+                        <span>主控地址</span>
+                        <input id="batch-server-url" type="url">
+                    </label>
+                    <label>
+                        <span>上报间隔</span>
+                        <input id="batch-interval" type="number" min="5" value="60">
+                    </label>
+                    <label class="wide-field">
+                        <span>默认服务探活</span>
+                        <input id="batch-services" type="text">
+                    </label>
+                    <label class="wide-field">
+                        <span>节点清单</span>
+                        <textarea id="batch-agents" rows="8" placeholder="node-01,东京节点,日本东京,203.0.113.10&#10;node-02,香港节点,香港,198.51.100.20"></textarea>
+                    </label>
+                </div>
+                <p class="admin-hint">每行格式：节点标识,显示名,位置,公网 IP；只填节点标识也可以。</p>
+                <div class="admin-actions">
+                    <button id="batch-register-btn" class="primary-btn">批量生成命令</button>
+                    <span id="batch-status"></span>
+                </div>
+            </section>
+
             <section class="admin-panel">
                 <div class="node-manager-header">
                     <h4>节点管理</h4>
                     <div class="node-manager-actions">
                         <button id="refresh-agents-btn" class="ghost-btn" type="button">刷新</button>
                         <button id="open-create-btn" class="primary-btn" type="button">+ 新增 Agent</button>
+                        <button id="open-batch-btn" class="ghost-btn" type="button">批量新增</button>
                     </div>
                 </div>
                 <div class="node-table-wrap">
@@ -113,6 +144,6 @@
         </section>
     </div>
 
-    <script src="/static/admin.js?v=services-default-2"></script>
+    <script src="/static/admin.js?v=batch-agents-1"></script>
 </body>
 </html>

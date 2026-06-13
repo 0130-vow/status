@@ -1,6 +1,7 @@
 const loginPanel = document.getElementById("login-panel");
 const agentPanel = document.getElementById("agent-panel");
 const createAgentPanel = document.getElementById("create-agent-panel");
+const batchAgentPanel = document.getElementById("batch-agent-panel");
 const usernameInput = document.getElementById("admin-username");
 const passwordInput = document.getElementById("admin-password");
 const loginStatusEl = document.getElementById("login-status");
@@ -8,9 +9,14 @@ const hostnameInput = document.getElementById("hostname");
 const serverUrlInput = document.getElementById("server-url");
 const intervalInput = document.getElementById("interval");
 const servicesInput = document.getElementById("services");
+const batchServerUrlInput = document.getElementById("batch-server-url");
+const batchIntervalInput = document.getElementById("batch-interval");
+const batchServicesInput = document.getElementById("batch-services");
+const batchAgentsInput = document.getElementById("batch-agents");
 const publicIpInput = document.getElementById("public-ip");
 const locationInput = document.getElementById("location");
 const statusEl = document.getElementById("admin-status");
+const batchStatusEl = document.getElementById("batch-status");
 const agentTableBody = document.getElementById("agent-table-body");
 const agentList = document.getElementById("agent-list");
 const agentEmpty = document.getElementById("agent-empty");
@@ -27,7 +33,9 @@ const state = {
 };
 
 serverUrlInput.value = window.location.origin;
+batchServerUrlInput.value = window.location.origin;
 servicesInput.value = servicesInput.value || defaultServices;
+batchServicesInput.value = batchServicesInput.value || defaultServices;
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -61,11 +69,29 @@ function setLoggedOut() {
     loginPanel.hidden = false;
     agentPanel.hidden = true;
     createAgentPanel.hidden = true;
+    batchAgentPanel.hidden = true;
     sessionUserEl.textContent = "";
     sessionUserEl.hidden = true;
     logoutBtn.hidden = true;
     passwordInput.value = "";
     commandBox.hidden = true;
+}
+
+function parseBatchAgents(raw) {
+    return raw
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#"))
+        .map((line) => {
+            const [hostname, name = "", location = "", publicIp = ""] = line.split(",").map((part) => part.trim());
+            return {
+                hostname,
+                name,
+                location,
+                public_ip: publicIp,
+            };
+        })
+        .filter((agent) => agent.hostname);
 }
 
 async function fetchJson(url, options = {}) {
@@ -303,11 +329,22 @@ logoutBtn.addEventListener("click", async () => {
 
 document.getElementById("open-create-btn").addEventListener("click", () => {
     createAgentPanel.hidden = false;
+    batchAgentPanel.hidden = true;
     createAgentPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 document.getElementById("close-create-btn").addEventListener("click", () => {
     createAgentPanel.hidden = true;
+});
+
+document.getElementById("open-batch-btn").addEventListener("click", () => {
+    batchAgentPanel.hidden = false;
+    createAgentPanel.hidden = true;
+    batchAgentPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+document.getElementById("close-batch-btn").addEventListener("click", () => {
+    batchAgentPanel.hidden = true;
 });
 
 document.getElementById("refresh-agents-btn").addEventListener("click", () => {
@@ -342,6 +379,35 @@ document.getElementById("register-btn").addEventListener("click", async () => {
         await loadAgents();
     } catch (error) {
         setStatus(statusEl, error.message, true);
+    }
+});
+
+document.getElementById("batch-register-btn").addEventListener("click", async () => {
+    const agents = parseBatchAgents(batchAgentsInput.value);
+    if (!agents.length) {
+        setStatus(batchStatusEl, "请填写至少一个节点", true);
+        return;
+    }
+
+    setStatus(batchStatusEl, "批量生成中...");
+
+    try {
+        const data = await fetchJson("/api/admin/agents/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                server_url: batchServerUrlInput.value.trim(),
+                interval_seconds: Number(batchIntervalInput.value || 60),
+                services: batchServicesInput.value.trim() || defaultServices,
+                agents,
+            }),
+        });
+
+        showCommand(`${data.count} 个 Agent 安装命令`, data.install_commands);
+        setStatus(batchStatusEl, `已登记 ${data.count} 个节点`);
+        await loadAgents();
+    } catch (error) {
+        setStatus(batchStatusEl, error.message, true);
     }
 });
 

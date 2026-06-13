@@ -83,6 +83,21 @@ class RegisterAgentPayload(BaseModel):
     token: str | None = None
 
 
+class BatchAgentItem(BaseModel):
+    hostname: str = Field(min_length=1, max_length=128)
+    name: str = Field(default="", max_length=128)
+    public_ip: str = ""
+    location: str = ""
+    services: str = ""
+
+
+class BatchRegisterAgentPayload(BaseModel):
+    server_url: str = "https://status.777702.xyz"
+    interval_seconds: int = Field(default=60, ge=5, le=86400)
+    services: str = DEFAULT_AGENT_SERVICES
+    agents: list[BatchAgentItem] = Field(default_factory=list)
+
+
 class UpdateAgentPayload(BaseModel):
     name: str = Field(default="", max_length=128)
     services: str = DEFAULT_AGENT_SERVICES
@@ -386,6 +401,75 @@ def write_agent_credential(payload: RegisterAgentPayload, token: str) -> None:
     write_config_raw(raw)
 
 
+def write_agent_credentials_batch(
+    payload: BatchRegisterAgentPayload,
+) -> list[tuple[RegisterAgentPayload, str]]:
+    if not payload.agents:
+        raise HTTPException(status_code=400, detail="agents cannot be empty")
+
+    raw = read_config_raw()
+    server = raw.setdefault("server", {})
+    agents = server.setdefault("agents", [])
+    existing_by_hostname = {
+        str(agent.get("hostname")): agent
+        for agent in agents
+        if agent.get("hostname")
+    }
+    seen: set[str] = set()
+    registered: list[tuple[RegisterAgentPayload, str]] = []
+    new_agents: list[dict[str, Any]] = []
+
+    for item in payload.agents:
+        hostname = item.hostname.strip()
+        if not hostname:
+            continue
+        if hostname in seen:
+            raise HTTPException(status_code=400, detail=f"duplicate hostname: {hostname}")
+        seen.add(hostname)
+
+        existing = existing_by_hostname.get(hostname, {})
+        token = str(existing.get("token") or secrets.token_hex(32))
+        services = item.services.strip() or payload.services or DEFAULT_AGENT_SERVICES
+        interval_seconds = payload.interval_seconds
+        public_ip = item.public_ip.strip() or str(existing.get("public_ip", ""))
+        location = item.location.strip() or str(existing.get("location", ""))
+        name = item.name.strip() or str(existing.get("name", "")) or hostname
+        agent_payload = RegisterAgentPayload(
+            hostname=hostname,
+            server_url=payload.server_url,
+            interval_seconds=interval_seconds,
+            services=services,
+            public_ip=public_ip,
+            location=location,
+            token=token,
+        )
+        registered.append((agent_payload, token))
+        new_agents.append(
+            {
+                "hostname": hostname,
+                "name": name,
+                "token": token,
+                "services": services,
+                "interval_seconds": interval_seconds,
+                "public_ip": public_ip,
+                "location": location,
+            }
+        )
+
+    if not registered:
+        raise HTTPException(status_code=400, detail="agents cannot be empty")
+
+    registered_hostnames = {agent_payload.hostname for agent_payload, _ in registered}
+    agents[:] = [
+        agent
+        for agent in agents
+        if agent.get("hostname") not in registered_hostnames
+    ]
+    agents.extend(new_agents)
+    write_config_raw(raw)
+    return registered
+
+
 def update_agent_config(hostname: str, payload: UpdateAgentPayload) -> dict[str, Any]:
     raw = read_config_raw()
     agents = raw.setdefault("server", {}).setdefault("agents", [])
@@ -508,6 +592,32 @@ def register_agent(
         "hostname": payload.hostname,
         "token": token,
         "install_command": build_install_command(payload, token),
+    }
+
+
+@app.post("/api/admin/agents/batch")
+def register_agents_batch(
+    payload: BatchRegisterAgentPayload,
+    request: Request,
+) -> dict[str, Any]:
+    require_admin(request)
+    registered = write_agent_credentials_batch(payload)
+    agents = []
+    command_chunks = []
+    for agent_payload, token in registered:
+        command = build_install_command(agent_payload, token)
+        agents.append(
+            {
+                "hostname": agent_payload.hostname,
+                "install_command": command,
+            }
+        )
+        command_chunks.append(f"# {agent_payload.hostname}\n{command}")
+    return {
+        "ok": True,
+        "count": len(agents),
+        "agents": agents,
+        "install_commands": "\n\n".join(command_chunks),
     }
 
 
